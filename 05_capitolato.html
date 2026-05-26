@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="athena-static-only" content="true"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Costo per Prodie — Dashboard Analytics</title>
-<link rel="stylesheet" href="shared/style.css?v=20260526-1000">
+<link rel="stylesheet" href="shared/style.css?v=20260527-1100">
 <style>
 .prodie-table { width:100%; border-collapse:collapse; font-size:12px; }
 .prodie-table th {
@@ -162,6 +162,15 @@
     </div>
   </div>
 
+  <!-- 💶 COSTI MEDI PER TIPOLOGIA + FASCIA -->
+  <div class="section-title">💶 Costo medio €/prodie per tipologia centro e fascia posti</div>
+  <div class="alert alert-info" style="margin-bottom:10px;font-size:11px">
+    ℹ️ I <strong>Centri Collettivi (CC)</strong> hanno economie di scala: il costo medio per giornata varia per fascia di posti.
+    I <strong>SUA/CAD (diffusi)</strong> hanno una struttura di costo diversa (affitti distribuiti, personale meno concentrato).
+    Il costo medio della cooperativa unico è fuorviante — qui è separato per tipo e fascia. Benchmark dai costi reali Zoho.
+  </div>
+  <div id="costi-medi-tipo" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px;"></div>
+
   <!-- TABELLA DETTAGLIO -->
   <div class="section-title">📊 Retta vs Costo per Prodie — Dettaglio per Categoria (€/prodie)</div>
   <div class="chart-card" style="overflow-x:auto">
@@ -197,10 +206,10 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
-<script src="shared/data.js?v=20260526-1000"></script>
-<script src="shared/filters.js?v=20260526-1000"></script>
-<script src="shared/live.js?v=20260526-1000"></script>
-<script src="shared/nav.js?v=20260526-1000"></script>
+<script src="shared/data.js?v=20260527-1100"></script>
+<script src="shared/filters.js?v=20260527-1100"></script>
+<script src="shared/live.js?v=20260527-1100"></script>
+<script src="shared/nav.js?v=20260527-1100"></script>
 <script>
 const CAP_KEYS = ['PISA','RIETI','DROSSO','LORANZE','VICENZA','MODENA','VICO','CAMBO'];
 
@@ -677,10 +686,40 @@ async function renderAllegatoA() {
   }
 }
 
+// ═══ Costi medi €/prodie per tipologia + fascia ═══
+function renderCostiMediTipo(){
+  const box = document.getElementById('costi-medi-tipo');
+  if(!box || !window.DA?.COSTI_MEDI_PER_TIPO) return;
+  // Ordine: CC per fascia crescente, poi SUA/CAD
+  const order = ['CC 0–50','CC 51–100','CC 101–300','CC >300','SUA/CAD (diffusi)'];
+  const groups = DA.COSTI_MEDI_PER_TIPO;
+  const present = order.filter(l => groups[l]);
+  const allEuro = present.map(l=>groups[l].euro_prodie).filter(v=>v!=null);
+  const maxE = Math.max(...allEuro, 1);
+  box.innerHTML = present.map(label=>{
+    const g = groups[label];
+    const color = g.tipo==='SUA' ? '#10b981' : '#3b82f6';
+    const cdcNames = g.cdc.map(k=>DA.CDC[k]?.label||k).join(', ');
+    const barW = g.euro_prodie ? Math.round(g.euro_prodie/maxE*100) : 0;
+    return `
+      <div style="background:rgba(15,23,42,.5);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:12px 14px;border-left:3px solid ${color};">
+        <div style="font-size:10px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:.04em;">${label}</div>
+        <div style="font-size:24px;font-weight:800;color:var(--text1);line-height:1.1;margin-top:4px;">€${g.euro_prodie?.toFixed(2) ?? 'N/D'}</div>
+        <div style="font-size:9.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;">costo medio / prodie</div>
+        <div style="height:6px;background:var(--surface2);border-radius:3px;margin:8px 0 6px;overflow:hidden;">
+          <div style="height:100%;border-radius:3px;background:${color};width:${barW}%;"></div>
+        </div>
+        <div style="font-size:10px;color:var(--text2);">${g.cdc.length} centro/i · ${DA.fmt(g.pres)} presenze</div>
+        <div style="font-size:9.5px;color:var(--text3);margin-top:2px;">${cdcNames}</div>
+      </div>`;
+  }).join('');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   renderAll();
   populateAllACdcSelect();
   renderAllegatoA();
+  renderCostiMediTipo();
   // Quando l'utente cambia il filtro principale CdC, riallinea la fascia Allegato A
   document.getElementById('f-cdc')?.addEventListener('change', () => {
     const v = document.getElementById('f-cdc').value;

@@ -1535,6 +1535,51 @@ DA.COSTI_MEDI_COOP = (function(){
 })();
 
 // ═══════════════════════════════════════════════════════════
+// COSTI MEDI €/PRODIE PER TIPOLOGIA CENTRO + FASCIA POSTI
+// I CC (Centri Collettivi) hanno economie di scala per fascia di posti;
+// i SUA/CAD (diffusi) hanno struttura di costo diversa (più affitti distribuiti).
+// Benchmark calcolato dai costi reali Zoho (Composizione Costi / Presenze).
+// Fasce CC: 0-50 · 51-100 · 101-300 · >300 (come da scaglioni capitolato CAS).
+// ═══════════════════════════════════════════════════════════
+DA.FASCE_CC = [
+  { min:0,   max:50,  label:'CC 0–50' },
+  { min:51,  max:100, label:'CC 51–100' },
+  { min:101, max:300, label:'CC 101–300' },
+  { min:301, max:9999,label:'CC >300' },
+];
+DA.getFasciaCC = function(posti){
+  return (DA.FASCE_CC.find(f => posti>=f.min && posti<=f.max) || DA.FASCE_CC[DA.FASCE_CC.length-1]).label;
+};
+DA.COSTI_MEDI_PER_TIPO = (function(){
+  // Gruppi: per i CC per fascia; per i SUA/CAD un unico gruppo
+  const groups = {}; // label → {pres, costi, cdc:[]}
+  const cdcRef = ['PISA','RIETI','DROSSO','LORANZE','VICENZA','VICO','CAMBO'];
+  cdcRef.forEach(k=>{
+    const meta = DA.CDC[k]; if(!meta) return;
+    const pres = DA.PRESENZE_FINAN[k] || 0;
+    const costi = DA.COSTI_CAT[k]?.TOTALE || 0;
+    if(pres<=0 || costi<=0) return; // esclude CdC senza dati completi (es. MODENA)
+    const tipo = meta.tipo;
+    const label = (tipo==='SUA'||tipo==='CAD') ? 'SUA/CAD (diffusi)' : DA.getFasciaCC(meta.posti_max||0);
+    if(!groups[label]) groups[label] = { pres:0, costi:0, cdc:[], tipo:(tipo==='SUA'||tipo==='CAD')?'SUA':'CC' };
+    groups[label].pres  += pres;
+    groups[label].costi += costi;
+    groups[label].cdc.push(k);
+  });
+  // Calcola €/prodie medio per gruppo
+  Object.values(groups).forEach(g=>{
+    g.euro_prodie = g.pres>0 ? +(g.costi/g.pres).toFixed(2) : null;
+  });
+  return groups;
+})();
+// Restituisce il costo medio €/prodie di riferimento per un CdC, in base a tipo+fascia
+DA.getCostoMedioRif = function(cdcKey){
+  const meta = DA.CDC[cdcKey]; if(!meta) return null;
+  const label = (meta.tipo==='SUA'||meta.tipo==='CAD') ? 'SUA/CAD (diffusi)' : DA.getFasciaCC(meta.posti_max||0);
+  return DA.COSTI_MEDI_PER_TIPO[label]?.euro_prodie ?? null;
+};
+
+// ═══════════════════════════════════════════════════════════
 // TURNOVER PER CDC — Dati REALI da Storico Rapporto (Zoho Creator)
 // Fonte: 1.184 rapporti → 461 persone uniche (TD+TI, escl. P.IVA/Vol/Tirocinio)
 // Formula: Cessati_anno / ((Organico_inizio_anno + Organico_fine_anno)/2) × 100

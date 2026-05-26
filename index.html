@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="athena-static-only" content="true"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Dashboard Analytics — Cooperativa Angolo</title>
-<link rel="stylesheet" href="shared/style.css?v=20260526-1000">
+<link rel="stylesheet" href="shared/style.css?v=20260527-1100">
 <style>
 /* ── RESET & BASE ─────────────────────────────────────────── */
 * { box-sizing:border-box; }
@@ -381,10 +381,10 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
-<script src="shared/data.js?v=20260526-1000"></script>
-<script src="shared/filters.js?v=20260526-1000"></script>
-<script src="shared/live.js?v=20260526-1000"></script>
-<script src="shared/nav.js?v=20260526-1000"></script>
+<script src="shared/data.js?v=20260527-1100"></script>
+<script src="shared/filters.js?v=20260527-1100"></script>
+<script src="shared/live.js?v=20260527-1100"></script>
+<script src="shared/nav.js?v=20260527-1100"></script>
 <script>
 document.addEventListener('DOMContentLoaded', ()=>{
   DA.chartDefaults(Chart);
@@ -909,11 +909,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
         const key = ZOHO_TO_KEY[nomeZoho] || nomeZoho.toUpperCase().split(' ')[0];
         const el = document.querySelector(`.cdc-live-now[data-cdc-key="${key}"]`);
         if (!el) return;
-        const prodie = d.prodie_mese;
-        if (prodie != null) {
+        // "presenze_oggi" = ospiti presenti effettivi (dato reale); prodie = media giorno
+        const presenze = d.presenze_oggi;
+        const prodie   = d.prodie_mese;
+        const dataRil  = d.ultima_data || '';
+        if (presenze != null) {
           el.style.display = 'inline';
-          el.querySelector('.cdc-live-val').textContent = '~' + Math.round(prodie);
-          el.title = `Prodie medio mese corrente Zoho: ${prodie.toFixed(1)} (live)`;
+          el.querySelector('.cdc-live-val').textContent = Math.round(presenze);
+          const satTxt = d.saturazione_pct != null ? ` · saturazione ${d.saturazione_pct}%` : '';
+          el.title = `Ospiti presenti (Zoho, rilevazione ${dataRil}): ${presenze}${satTxt} · media giorno (prodie): ${prodie?.toFixed?.(1) ?? prodie}`;
         }
       });
     } catch (e) {
