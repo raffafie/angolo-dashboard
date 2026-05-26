@@ -9,13 +9,13 @@
 ;(function(window) {
   'use strict';
 
-  // STANDALONE BUILD — meta tag <meta name="athena-static-only" content="true">
-  // forza la modalità statica e disabilita tutti i fetch backend.
-  const STATIC_META = document.querySelector('meta[name="athena-static-only"]');
-  const FORCE_STATIC = STATIC_META && STATIC_META.getAttribute('content') === 'true';
-  const IS_LIVE = !FORCE_STATIC && window.location.protocol.startsWith('http');
+  const IS_LIVE = window.location.protocol.startsWith('http');
 
-  // Base URL backend — non usato se FORCE_STATIC = true
+  // Base URL del backend Athena (Flask app.py).
+  // - Su stessa origine (es. dashboard servita da app.py) → '' (relative)
+  // - Su origine diversa (dashboard locale 7788 + app.py 5000) → 'http://localhost:5000'
+  //   Override possibile via <meta name="athena-base" content="..."> nell'HTML
+  //   o via window.ATHENA_BASE pre-script.
   const ATHENA_BASE = (function(){
     if (window.ATHENA_BASE !== undefined) return window.ATHENA_BASE;
     const meta = document.querySelector('meta[name="athena-base"]');
@@ -34,10 +34,7 @@
   function renderDataBar() {
     const bar = document.getElementById('data-mode-bar');
     if (bar) {
-      if (FORCE_STATIC) {
-        bar.className = 'data-bar static';
-        bar.innerHTML = '<span class="dot"></span>📦 Versione <strong>Standalone</strong> · dati statici Cooperativa Angolo (snapshot Aprile 2025) · nessuna connessione Zoho';
-      } else if (IS_LIVE) {
+      if (IS_LIVE) {
         bar.className = 'data-bar live';
         bar.innerHTML = '<span class="dot"></span>Dati live da Zoho <strong>Analytics</strong> + <strong>Creator</strong> — cache 5 min';
       } else {
@@ -47,17 +44,11 @@
     }
     const badge = document.getElementById('data-badge');
     if (badge) {
-      if (FORCE_STATIC) {
-        badge.className = 'data-badge static';
-        badge.textContent = '📦 STANDALONE';
-        badge.title = 'Versione standalone · dati statici · senza fetch Zoho';
-      } else {
-        badge.className = IS_LIVE ? 'data-badge live' : 'data-badge static';
-        badge.textContent = IS_LIVE ? '● LIVE' : '◌ OFFLINE';
-      }
+      badge.className = IS_LIVE ? 'data-badge live' : 'data-badge static';
+      badge.textContent = IS_LIVE ? '● LIVE' : '◌ OFFLINE';
     }
-    // Healthcheck async solo se non FORCE_STATIC
-    if (IS_LIVE && !FORCE_STATIC && badge) _refreshSourceHealth(badge, bar);
+    // Healthcheck async: aggiorna badge con stato reale delle 2 sorgenti
+    if (IS_LIVE && badge) _refreshSourceHealth(badge, bar);
   }
 
   /** Healthcheck async delle sorgenti Analytics + Creator → aggiorna badge/bar. */

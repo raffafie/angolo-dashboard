@@ -1,10 +1,9 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-<meta charset="UTF-8">
-<meta name="athena-static-only" content="true"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Dashboard Analytics — Cooperativa Angolo</title>
-<link rel="stylesheet" href="shared/style.css?v=20260525-1800">
+<link rel="stylesheet" href="shared/style.css?v=20260526-1000">
 <style>
 /* ── RESET & BASE ─────────────────────────────────────────── */
 * { box-sizing:border-box; }
@@ -381,10 +380,10 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
-<script src="shared/data.js?v=20260525-1800"></script>
-<script src="shared/filters.js?v=20260525-1800"></script>
-<script src="shared/live.js?v=20260525-1800"></script>
-<script src="shared/nav.js?v=20260525-1800"></script>
+<script src="shared/data.js?v=20260526-1000"></script>
+<script src="shared/filters.js?v=20260526-1000"></script>
+<script src="shared/live.js?v=20260526-1000"></script>
+<script src="shared/nav.js?v=20260526-1000"></script>
 <script>
 document.addEventListener('DOMContentLoaded', ()=>{
   DA.chartDefaults(Chart);
@@ -497,6 +496,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const cdc = DA.CDC[k];
     const pres = DA.PRESENZE_EST[k]||0;
     const ospMedi = Math.round(pres/365);
+    const postiMax = cdc.posti_max || '?';
+    // Saturazione media 2025 = ospiti medi / posti autorizzati
+    const sat2025 = (cdc.posti_max && ospMedi) ? Math.round(ospMedi / cdc.posti_max * 100) : null;
     const margPct = d.f>0?((d.r/d.f)*100):null;
     const prodie = d.prodie;
     const conf = DA.CONFORMITA_CDC[k];
@@ -524,7 +526,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
           <div class="cdc-card-name">${cdc.label}</div>
           <div class="cdc-card-badges">
             <span class="cdc-badge ${cfg.tipo==='CC'?'badge-cc':cfg.tipo==='CAD'?'badge-cad':'badge-mixed'}">${cfg.tipo}</span>
-            <span style="font-size:9.5px;color:var(--text3);margin-left:2px;">👤 ${DA.fmt(ospMedi)}/gg</span>
+            <span style="font-size:9.5px;color:var(--text3);margin-left:2px;" data-tip="Ospiti medi al giorno · media 2025 (storico). Per dato OGGI vedi 'live'.">
+              👤 ${DA.fmt(ospMedi)} med 2025
+            </span>
+            <span class="cdc-live-now" data-cdc-key="${k}" style="font-size:9.5px;color:var(--text3);margin-left:2px;display:none;">
+              <span class="dot" style="display:inline-block;width:5px;height:5px;border-radius:50%;background:#10b981;margin-right:3px;"></span>
+              <span class="cdc-live-val">…</span> oggi
+            </span>
+            <span style="font-size:9px;color:var(--text3);margin-left:2px;">/${postiMax} posti</span>
           </div>
         </div>
         <div class="health-badge health-${health}" data-tip="Salute operativa: ${health.toUpperCase()}">${healthIcon}</div>
@@ -879,6 +888,37 @@ document.addEventListener('DOMContentLoaded', ()=>{
   }
   document.getElementById('hr-year')?.addEventListener('change', loadHrMovements);
   loadHrMovements();
+
+  // ─── 📡 PRESENZE LIVE per CdC card (oggi vs media 2025) ──────────────────
+  // Popola "X oggi" nelle card CdC con il prodie del mese corrente da Zoho.
+  // In modalità standalone non parte (no backend).
+  (async function loadLiveByCdC() {
+    if (!window.LIVE?.getSaturazione || !window.LIVE.isLive) return;
+    try {
+      const snap = await window.LIVE.getSaturazione();
+      if (!snap || !snap.by_cdc) return;
+      // Mapping nome Zoho CdC → sigla dashboard
+      const ZOHO_TO_KEY = {
+        'CAS PISA':'PISA', 'CAD RIETI':'RIETI', 'DROSSO':'DROSSO',
+        'LORANZÈ':'LORANZE', 'LORANZE':'LORANZE', "LORANZE'":'LORANZE',
+        'VICENZA':'VICENZA', 'MODENA IMMIGRAZIONE':'MODENA',
+        'VICO-VALCHIUSA':'VICO', 'CAMPOBASSO':'CAMBO',
+      };
+      Object.entries(snap.by_cdc).forEach(([nomeZoho, d]) => {
+        const key = ZOHO_TO_KEY[nomeZoho] || nomeZoho.toUpperCase().split(' ')[0];
+        const el = document.querySelector(`.cdc-live-now[data-cdc-key="${key}"]`);
+        if (!el) return;
+        const prodie = d.prodie_mese;
+        if (prodie != null) {
+          el.style.display = 'inline';
+          el.querySelector('.cdc-live-val').textContent = '~' + Math.round(prodie);
+          el.title = `Prodie medio mese corrente Zoho: ${prodie.toFixed(1)} (live)`;
+        }
+      });
+    } catch (e) {
+      console.warn('loadLiveByCdC error', e);
+    }
+  })();
 });
 </script>
 </body>
