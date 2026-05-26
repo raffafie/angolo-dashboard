@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="athena-static-only" content="true"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HR Analytics — Dashboard Analytics</title>
+<link rel="stylesheet" href="shared/style.css?v=20260525-1800">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* ── Layout ──────────────────────────────────────────────── */
+.hr-filters {
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius-lg); padding:12px 16px;
+  margin-bottom:20px; box-shadow:var(--shadow);
+}
+.hr-filters label { font-size:11px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.5px; color:var(--text3); }
+.hr-filters select {
+  font-size:13px; font-weight:500; color:var(--text);
+  background:var(--surface2); border:1px solid var(--border);
+  border-radius:6px; padding:5px 28px 5px 10px;
+  appearance:none; cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 8px center;
+}
+.hr-filters select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+.hr-filters .pill-anno {
+  display:flex; gap:4px; background:var(--surface2);
+  border:1px solid var(--border); border-radius:8px; padding:3px;
+}
+.hr-filters .pill-anno button {
+  border:none; border-radius:6px; padding:4px 12px;
+  font-size:12px; font-weight:600; cursor:pointer;
+  background:transparent; color:var(--text2); transition:all .15s;
+}
+.hr-filters .pill-anno button.active {
+  background:var(--accent); color:#fff; box-shadow:0 1px 4px rgba(37,99,235,.3);
+}
+.hr-filters .hr-sep { width:1px; height:24px; background:var(--border); }
+
+/* ── KPI ─────────────────────────────────────────────────── */
+.hr-kpi-grid {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr));
+  gap:12px; margin-bottom:24px;
+}
+.hr-kpi {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius-lg); padding:16px 14px;
+  border-top:3px solid var(--accent); transition:box-shadow .15s;
+  position:relative; overflow:hidden;
+}
+.hr-kpi:nth-child(2) { border-top-color:var(--emerald); }
+.hr-kpi:nth-child(3) { border-top-color:var(--amber); }
+.hr-kpi:nth-child(4) { border-top-color:var(--violet); }
+.hr-kpi:nth-child(5) { border-top-color:#0891b2; }
+.hr-kpi:nth-child(6) { border-top-color:#db2777; }
+.hr-kpi:hover { box-shadow:var(--shadow-md); }
+.hr-kpi .lbl  { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--text3); margin-bottom:6px; }
+.hr-kpi .val  { font-size:24px; font-weight:800; color:var(--text); line-height:1; }
+.hr-kpi .sub  { font-size:11px; color:var(--text3); margin-top:4px; }
+.hr-kpi .delta { font-size:11px; font-weight:600; margin-top:6px; display:flex; align-items:center; gap:3px; }
+.hr-kpi .delta.up   { color:var(--emerald); }
+.hr-kpi .delta.down { color:#dc2626; }
+
+/* ── Section headers ─────────────────────────────────────── */
+.sec-hdr {
+  display:flex; align-items:center; gap:10px;
+  margin:28px 0 14px; padding-bottom:10px;
+  border-bottom:2px solid var(--border);
+}
+.sec-hdr .ico { font-size:18px; }
+.sec-hdr h2 { font-size:14px; font-weight:800; color:var(--text); margin:0; }
+.sec-hdr .badge {
+  font-size:10px; font-weight:700; letter-spacing:.4px;
+  padding:2px 9px; border-radius:20px; text-transform:uppercase;
+}
+.b-ore    { background:var(--accent-bg); color:var(--accent); }
+.b-costi  { background:var(--emerald-bg); color:var(--emerald); }
+.b-org    { background:var(--violet-bg); color:var(--violet); }
+.b-lev    { background:var(--amber-bg); color:var(--amber); }
+
+/* ── Chart layout ────────────────────────────────────────── */
+.grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+@media(max-width:960px) { .grid-2,.grid-3 { grid-template-columns:1fr; } }
+
+.chart-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius-lg); padding:18px 20px;
+  box-shadow:var(--shadow);
+}
+.chart-card.full { grid-column:1/-1; }
+.chart-ttl {
+  font-size:11px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.5px; color:var(--text2); margin-bottom:12px;
+}
+/* ← FIX CRITICO: altezza esplicita sul wrapper → Chart.js usa questa */
+.chart-wrap { position:relative; height:240px; width:100%; }
+.chart-wrap.h200 { height:200px; }
+.chart-wrap.h300 { height:300px; }
+.chart-wrap.h360 { height:360px; }
+.chart-note { font-size:10px; color:var(--text3); margin-top:8px; font-style:italic; }
+
+/* ── Tabella ─────────────────────────────────────────────── */
+.hr-table { width:100%; border-collapse:collapse; font-size:13px; }
+.hr-table th {
+  background:var(--surface2); color:var(--text3); font-weight:700;
+  padding:8px 12px; text-align:left; font-size:10px; text-transform:uppercase;
+  letter-spacing:.5px; border-bottom:2px solid var(--border); white-space:nowrap;
+}
+.hr-table td { padding:8px 12px; border-bottom:1px solid var(--border); }
+.hr-table tbody tr:hover td { background:var(--surface2); }
+.hr-table .num { text-align:right; font-variant-numeric:tabular-nums; }
+.hr-table .euro { color:var(--emerald); font-weight:700; }
+.hr-table .euro-h { color:var(--accent); font-weight:700; }
+.cdc-pill {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:3px 9px; border-radius:20px; font-size:11px; font-weight:700;
+}
+.p-modena  { background:rgba(219,39,119,.1); color:#db2777; }
+.p-drosso  { background:rgba(5,150,105,.1);  color:#059669; }
+.p-vico    { background:rgba(234,88,12,.1);  color:#ea580c; }
+.p-pisa    { background:rgba(37,99,235,.1);  color:#2563eb; }
+.p-vicenza { background:rgba(8,145,178,.1);  color:#0891b2; }
+.p-loranze { background:rgba(124,58,237,.1); color:#7c3aed; }
+.p-rieti   { background:rgba(217,119,6,.1);  color:#d97706; }
+
+/* ── Data note ───────────────────────────────────────────── */
+.data-note {
+  background:#fffbeb; border:1px solid #fde68a;
+  border-radius:var(--radius); padding:10px 14px;
+  font-size:11px; color:#92400e; margin-bottom:16px;
+  display:flex; align-items:flex-start; gap:8px;
+}
+.data-note .ico { font-size:14px; margin-top:1px; flex-shrink:0; }
+
+/* ── Empty state ─────────────────────────────────────────── */
+.no-data {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  height:100%; gap:6px; color:var(--text3);
+}
+.no-data .ico { font-size:28px; }
+.no-data p { font-size:12px; }
+</style>
+</head>
+<body data-page="hr-an">
+<div id="topbar"></div>
+
+<div class="main">
+<div class="page-header">
+  <h1><span class="icon">💼</span> HR Analytics — Costi & Presenze</h1>
+  <p>Ore lavorate, incidenza, costi del personale per Centro di Costo · Fonte: Zoho Creator (Presenze Mensili, Costo Personale, Storico Rapporto)</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  FILTRI                                                    -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="hr-filters">
+  <label>Anno</label>
+  <div class="pill-anno" id="pill-anno">
+    <button data-v="2025" class="active">2025</button>
+    <button data-v="2026">2026 ◌</button>
+    <button data-v="2024">2024</button>
+    <button data-v="all">Tutti</button>
+  </div>
+  <div class="hr-sep"></div>
+  <label>Centro di Costo</label>
+  <select id="f-cdc" onchange="renderAll()">
+    <option value="all">Tutti i CdC</option>
+    <option value="MODENA">MODENA</option>
+    <option value="DROSSO">DROSSO</option>
+    <option value="VICO">VICO</option>
+    <option value="PISA">PISA</option>
+    <option value="VICENZA">VICENZA</option>
+    <option value="LORANZE">LORANZE</option>
+    <option value="RIETI">RIETI</option>
+  </select>
+  <div class="hr-sep"></div>
+  <span id="lbl-periodo" style="font-size:12px;color:var(--text2);font-weight:600;"></span>
+</div>
+
+<!-- KPI ────────────────────────────────────────────────────── -->
+<div id="kpi-grid" class="hr-kpi-grid"></div>
+
+<div class="data-note">
+  <span class="ico">⚠️</span>
+  <span><strong>Copertura parziale:</strong> PM 436/1000 record abbinati a CdC via join Matricola; Costi 153/607 record Costo Personale abbinati a CdC. I totali rispecchiano la sincronizzazione Analytics disponibile.</span>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  SEZ 0: MANSIONI RAGGRUPPATE PER CATEGORIA ALLEGATO A      -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="sec-hdr">
+  <span class="ico">🗂️</span>
+  <h2>Mansioni raggruppate per categoria capitolato</h2>
+  <span class="badge b-ore" style="background:rgba(139,92,246,.15);color:#a78bfa;">Fonte Zoho · Dotazione_Minima_Cas + override</span>
+</div>
+<div class="chart-card" style="margin-bottom:20px;">
+  <div style="font-size:11px;color:var(--text3);margin-bottom:12px;">
+    Le mansioni Zoho sono raggruppate nelle 8 figure dell'Allegato A. <strong>PSICOLOGO/A</strong>, <strong>INSEGNANTE</strong>, <strong>ANIMATORE</strong> sono mappate come <em>OPERATORE SOCIALE</em> via override locale (Zoho Dotazione_Minima_Cas non li include nativamente).
+  </div>
+  <div id="mansioni-grouped" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;">
+    <!-- riempito via JS -->
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  SEZ 1: ORE MENSILI                                        -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="sec-hdr">
+  <span class="ico">⏱️</span>
+  <h2>Ore Lavorate</h2>
+  <span class="badge b-ore">Presenze Mensili</span>
+</div>
+<div class="grid-2">
+  <div class="chart-card">
+    <div class="chart-ttl">Andamento Mensile per CdC — anno selezionato</div>
+    <div class="chart-wrap"><canvas id="c-ore-mesi"></canvas></div>
+    <div class="chart-note">Ore lavorate aggregate per CdC · mese per mese</div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-ttl">Confronto Annuale Ore per CdC</div>
+    <div class="chart-wrap"><canvas id="c-ore-anni"></canvas></div>
+    <div class="chart-note">Totale ore lavorate per CdC · 2024 vs 2025 vs 2026</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  SEZ 2: INCIDENZA & TURNI SPECIALI                         -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="sec-hdr">
+  <span class="ico">📈</span>
+  <h2>Presenza Reale & Turni Speciali</h2>
+  <span class="badge b-ore">% Ore Pagate Fisicamente Lavorate · Notturno · Festivo</span>
+</div>
+<div class="grid-2">
+  <div class="chart-card">
+    <div class="chart-ttl">Presenza Reale — % Ore Lavorate su Ore Pagate Totali</div>
+    <div class="chart-wrap"><canvas id="c-incidenza"></canvas></div>
+    <div class="chart-note"><strong>Formula:</strong> Ore Lavorate ÷ (Ore Lavorate + Assenze Retribuite est.) × 100 &nbsp;·&nbsp; <strong>100%</strong> = nessuna assenza rilevata &nbsp;·&nbsp; <strong>&lt;100%</strong> = ferie/permessi/malattia/104 stimati dalla differenza Spettanti–Lavorate (al netto banca ore)</div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-ttl">Ore Notturne per CdC per Mese</div>
+    <div class="chart-wrap"><canvas id="c-notti"></canvas></div>
+    <div class="chart-note">Solo CdC con turni notturni registrati nell'anno selezionato</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  SEZ 2b: REPERIBILITÀ                                      -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="sec-hdr" style="margin-top:20px">
+  <span class="ico">📡</span>
+  <h2>Reperibilità</h2>
+  <span class="badge" style="background:rgba(8,145,178,.12);color:#0891b2">Disponibilità Retribuita — NON computata in ore lavorate</span>
+</div>
+<div class="data-note" style="background:#eff6ff;border-color:#bfdbfe;color:#1e3a5f">
+  <span class="ico">ℹ️</span>
+  <span><strong>Reperibilità:</strong> ore in cui il lavoratore è retribuito per essere disponibile in caso di chiamata, senza obbligo di presenza fisica. Queste ore <strong>non entrano nel computo delle ore lavorate</strong> e devono essere monitorate separatamente. In Zoho: campo <em>Reperibilità Notturna</em> e <em>Reperibilità Diurna</em>.</span>
+</div>
+<div class="grid-2">
+  <div class="chart-card">
+    <div class="chart-ttl">Ore Reperibilità Mensile per CdC</div>
+    <div class="chart-wrap"><canvas id="c-reperibilita"></canvas></div>
+    <div class="chart-note">Somma Reperibilità Diurna + Notturna · solo CdC con reperibilità nell'anno selezionato</div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-ttl">Confronto Notturno vs Reperibilità Notturna (MODENA)</div>
+    <div class="chart-wrap"><canvas id="c-nott-vs-rep"></canvas></div>
+    <div class="chart-note">Ore notturne lavorate vs ore di reperibilità notturna · MODENA (unico CdC con reperibilità significativa)</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  SEZ 3: COSTI                                              -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="sec-hdr">
+  <span class="ico">💶</span>
+  <h2>Costi del Personale</h2>
+  <span class="badge b-costi">Costo Personale Zoho Creator</span>
+</div>
+<div class="grid-2">
+  <div class="chart-card">
+    <div class="chart-ttl">Costo Totale Annuale per CdC (€)</div>
+    <div class="chart-wrap"><canvas id="c-costi-cdc"></canvas></div>
+    <div class="chart-note">Somma Costo Personale per SR abbinato a CdC · dati annuali 2023–2025</div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-ttl">Costo Orario Medio (€/h) per CdC</div>
+    <div class="chart-wrap"><canvas id="c-costo-orario"></canvas></div>
+    <div class="chart-note">Costo Totale ÷ Ore Lavorate · per anno · subset abbinato</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  SEZ 4: LIVELLI & MANSIONI                                 -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="sec-hdr">
+  <span class="ico">🎯</span>
+  <h2>Organico per Livello e Mansione</h2>
+  <span class="badge b-org">Storico Rapporto — tutti i contratti</span>
+</div>
+<div class="grid-2">
+  <div class="chart-card">
+    <div class="chart-ttl">Distribuzione Contratti per Livello CCNL e CdC</div>
+    <div class="chart-wrap h300"><canvas id="c-organico-livello"></canvas></div>
+    <div class="chart-note">N° contratti (attivi + cessati) per livello e centro</div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-ttl">Costo Annuale per Livello CCNL (€)</div>
+    <div class="chart-wrap h300"><canvas id="c-costi-livello"></canvas></div>
+    <div class="chart-note">Confronto 2023–2025 per livello contrattuale</div>
+  </div>
+</div>
+
+<div class="chart-card" style="margin-top:16px">
+  <div class="chart-ttl">Top Mansioni per Centro di Costo (n° contratti)</div>
+  <div class="chart-wrap h360"><canvas id="c-mansioni"></canvas></div>
+  <div class="chart-note">Include contratti attivi e cessati · etichette abbreviate</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  SEZ 5: TABELLA RIEPILOGATIVA                              -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="sec-hdr">
+  <span class="ico">📋</span>
+  <h2>Riepilogo Costi & Ore per CdC</h2>
+  <span class="badge b-costi">Anno selezionato</span>
+</div>
+<div class="chart-card">
+  <div style="overflow-x:auto">
+    <table class="hr-table">
+      <thead><tr>
+        <th>CdC</th>
+        <th class="num">Ore Lavorate</th>
+        <th class="num">Assenze est. ¹</th>
+        <th class="num">Presenza Reale ¹</th>
+        <th class="num">Banca Ore ³</th>
+        <th class="num">Reperibilità ²</th>
+        <th class="num">Costo Pers. (€)</th>
+        <th class="num">€ / Ora</th>
+        <th class="num">Contratti SR</th>
+      </tr></thead>
+      <tbody id="tbl-body"></tbody>
+    </table>
+    <p style="font-size:10px;color:var(--text3);margin-top:8px">¹ <strong>Presenza Reale</strong> = Ore Lavorate ÷ (Ore Lavorate + Assenze est.) × 100. Risponde a: "di tutte le ore che ho pagato, quante sono state fisicamente lavorate?" &nbsp;·&nbsp; <strong>Assenze est.</strong> = max(0, Ore Spettanti − Ore Lavorate + Banca Ore): derivate per differenza (Zoho non espone Ferie/Permessi/Malattia come campo numerico separato). &nbsp;|&nbsp; ² Reperibilità = disponibilità retribuita (Diurna + Notturna), <strong>NON computata nelle ore lavorate</strong>, monitorata separatamente. &nbsp;|&nbsp; ³ Banca Ore: +accumulo (arancio) / −smaltimento (verde). Le ore in banca sono già incluse in Ore Lavorate.</p>
+  </div>
+</div>
+
+</div><!-- /.main -->
+
+<script src="shared/nav.js?v=20260525-1800"></script>
+<script src="shared/data.js?v=20260525-1800"></script>
+<script src="shared/filters.js?v=20260525-1800"></script>
+<script src="shared/hr_data.js?v=20260525-1800"></script>
+<script src="shared/live.js?v=20260525-1800"></script>
+<script>
+// ═══════════════════════════════════════════════════════════
+// DATI EMBEDDED — generati da hr_data_final.py (join Matricola)
+// ═══════════════════════════════════════════════════════════
+const HR = {
+HR_ORE_CDC: DA.HR_ORE_CDC, // → da shared/hr_data.js (fonte Zoho centralizzata)"10":{"lav":606.5,"ret":598.5,"spett":608.0,"giust":0.0,"nott":56.0,"rep_d":0.0,"rep_n":0.0,"fest_d":53.5,"fest_n":8.0,"banca":-1.5,"assenze":0.0,"n":4,"inc":99.8,"inc2":100.0},"1":{"lav":1537.2,"ret":1513.2,"spett":1535.3,"giust":0.0,"nott":153.0,"rep_d":0.0,"rep_n":0.0,"fest_d":208.5,"fest_n":24.0,"banca":1.9,"assenze":0.0,"n":10,"inc":100.1,"inc2":100.0},"4":{"lav":152.0,"ret":152.0,"spett":158.3,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":-6.3,"assenze":0.0,"n":1,"inc":96.0,"inc2":100.0},"3":{"lav":167.5,"ret":167.5,"spett":164.7,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":2.8,"assenze":0.0,"n":1,"inc":101.7,"inc2":100.0},"6":{"lav":467.0,"ret":427.0,"spett":437.0,"giust":0.0,"nott":88.0,"rep_d":0.0,"rep_n":0.0,"fest_d":51.0,"fest_n":40.0,"banca":30.0,"assenze":0.0,"n":3,"inc":106.9,"inc2":100.0},"7":{"lav":175.0,"ret":175.0,"spett":164.7,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":40.0,"fest_n":0.0,"banca":10.3,"assenze":0.0,"n":1,"inc":106.3,"inc2":100.0},"8":{"lav":155.0,"ret":147.0,"spett":152.0,"giust":0.0,"nott":40.0,"rep_d":0.0,"rep_n":0.0,"fest_d":16.0,"fest_n":8.0,"banca":3.0,"assenze":0.0,"n":1,"inc":102.0,"inc2":100.0}},"2026":{"1":{"lav":316.0,"ret":300.0,"spett":316.7,"giust":0.0,"nott":32.0,"rep_d":0.0,"rep_n":0.0,"fest_d":33.0,"fest_n":16.0,"banca":-0.7,"assenze":0.0,"n":2,"inc":99.8,"inc2":100.0},"10":{"lav":301.0,"ret":301.0,"spett":328.0,"giust":0.0,"nott":40.0,"rep_d":0.0,"rep_n":0.0,"fest_d":9.0,"fest_n":0.0,"banca":-27.0,"assenze":0.0,"n":3,"inc":91.8,"inc2":100.0},"9":{"lav":330.0,"ret":330.0,"spett":355.3,"giust":0.0,"nott":80.0,"rep_d":0.0,"rep_n":0.0,"fest_d":45.0,"fest_n":0.0,"banca":-25.3,"assenze":0.0,"n":3,"inc":92.9,"inc2":100.0}}},"MODENA":{"2025":{"1":{"lav":2276.0,"ret":2276.0,"spett":2291.6,"giust":0.0,"nott":69.5,"rep_d":0.0,"rep_n":488.0,"fest_d":78.0,"fest_n":0.0,"banca":-15.7,"assenze":0.0,"n":15,"inc":99.3,"inc2":100.0},"2":{"lav":1488.0,"ret":1488.0,"spett":1543.5,"giust":0.0,"nott":84.0,"rep_d":0.0,"rep_n":552.0,"fest_d":33.0,"fest_n":0.0,"banca":115.5,"assenze":171.0,"n":9,"inc":96.4,"inc2":89.7},"8":{"lav":1631.0,"ret":1631.0,"spett":1544.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":184.0,"fest_n":0.0,"banca":-65.0,"assenze":0.0,"n":11,"inc":105.6,"inc2":100.0},"3":{"lav":1469.0,"ret":1469.0,"spett":1382.3,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":416.0,"fest_d":80.0,"fest_n":0.0,"banca":86.7,"assenze":0.0,"n":9,"inc":106.3,"inc2":100.0},"5":{"lav":939.2,"ret":939.2,"spett":864.0,"giust":0.0,"nott":16.0,"rep_d":0.0,"rep_n":296.0,"fest_d":0.0,"fest_n":0.0,"banca":75.2,"assenze":0.0,"n":5,"inc":108.7,"inc2":100.0},"7":{"lav":502.5,"ret":502.5,"spett":494.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":16.0,"fest_n":0.0,"banca":-156.2,"assenze":0.0,"n":4,"inc":101.7,"inc2":100.0},"12":{"lav":827.5,"ret":827.5,"spett":880.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":816.0,"fest_d":137.0,"fest_n":0.0,"banca":99.5,"assenze":152.0,"n":6,"inc":94.0,"inc2":84.5},"10":{"lav":882.0,"ret":882.0,"spett":864.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":85.0,"fest_n":0.0,"banca":18.0,"assenze":0.0,"n":6,"inc":102.1,"inc2":100.0},"9":{"lav":331.0,"ret":331.0,"spett":338.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":34.5,"fest_n":0.0,"banca":-7.0,"assenze":0.0,"n":2,"inc":97.9,"inc2":100.0},"4":{"lav":902.5,"ret":902.5,"spett":912.5,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":344.0,"fest_d":58.5,"fest_n":0.0,"banca":-10.0,"assenze":0.0,"n":6,"inc":98.9,"inc2":100.0},"6":{"lav":978.5,"ret":973.5,"spett":921.3,"giust":0.0,"nott":12.0,"rep_d":0.0,"rep_n":0.0,"fest_d":80.0,"fest_n":5.0,"banca":-94.8,"assenze":0.0,"n":7,"inc":106.2,"inc2":100.0}},"2024":{"2":{"lav":1609.2,"ret":1609.2,"spett":1363.5,"giust":0.0,"nott":0.0,"rep_d":490.0,"rep_n":1530.0,"fest_d":26.5,"fest_n":0.0,"banca":68.8,"assenze":0.0,"n":9,"inc":118.0,"inc2":100.0},"12":{"lav":668.5,"ret":652.0,"spett":608.0,"giust":0.0,"nott":16.0,"rep_d":0.0,"rep_n":0.0,"fest_d":24.0,"fest_n":16.5,"banca":60.5,"assenze":0.0,"n":4,"inc":110.0,"inc2":100.0},"1":{"lav":476.5,"ret":476.5,"spett":316.7,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":60.0,"fest_n":0.0,"banca":1.5,"assenze":0.0,"n":3,"inc":150.5,"inc2":100.0}},"2026":{"1":{"lav":1089.0,"ret":1089.0,"spett":1084.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":640.0,"fest_d":85.0,"fest_n":0.0,"banca":157.0,"assenze":152.0,"n":8,"inc":100.5,"inc2":87.8},"10":{"lav":1356.5,"ret":1356.5,"spett":1341.0,"giust":0.0,"nott":24.0,"rep_d":0.0,"rep_n":1120.0,"fest_d":85.0,"fest_n":0.0,"banca":16.5,"assenze":1.0,"n":11,"inc":101.2,"inc2":99.9},"9":{"lav":1754.5,"ret":1754.5,"spett":1673.7,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":1184.0,"fest_d":104.0,"fest_n":0.0,"banca":80.8,"assenze":0.0,"n":14,"inc":104.8,"inc2":100.0}}},"VICENZA":{"2025":{"1":{"lav":995.0,"ret":995.0,"spett":931.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":87.5,"fest_n":0.0,"banca":64.0,"assenze":0.0,"n":7,"inc":106.9,"inc2":100.0},"5":{"lav":168.5,"ret":168.5,"spett":171.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":-2.5,"assenze":0.0,"n":2,"inc":98.5,"inc2":100.0},"12":{"lav":159.5,"ret":159.5,"spett":152.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":7.5,"assenze":0.0,"n":1,"inc":104.9,"inc2":100.0},"2":{"lav":513.5,"ret":513.5,"spett":513.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":0.5,"assenze":0.0,"n":4,"inc":100.1,"inc2":100.0},"3":{"lav":739.0,"ret":739.0,"spett":758.3,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":8.0,"fest_n":0.0,"banca":-19.3,"assenze":0.0,"n":5,"inc":97.5,"inc2":100.0},"7":{"lav":436.0,"ret":436.0,"spett":459.3,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":7.5,"fest_n":0.0,"banca":-23.3,"assenze":0.0,"n":4,"inc":94.9,"inc2":100.0},"8":{"lav":478.5,"ret":478.5,"spett":456.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":30.5,"fest_n":0.0,"banca":22.5,"assenze":0.0,"n":4,"inc":104.9,"inc2":100.0},"10":{"lav":147.0,"ret":147.0,"spett":152.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":-5.0,"assenze":0.0,"n":1,"inc":96.7,"inc2":100.0},"4":{"lav":181.0,"ret":181.0,"spett":158.3,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":6.0,"fest_n":0.0,"banca":22.7,"assenze":0.0,"n":1,"inc":114.3,"inc2":100.0},"6":{"lav":158.5,"ret":158.5,"spett":152.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":22.5,"fest_n":0.0,"banca":6.5,"assenze":0.0,"n":1,"inc":104.3,"inc2":100.0}},"2026":{"1":{"lav":341.0,"ret":341.0,"spett":316.7,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":37.5,"fest_n":0.0,"banca":24.3,"assenze":0.0,"n":2,"inc":107.7,"inc2":100.0},"10":{"lav":311.0,"ret":311.0,"spett":320.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":7.0,"assenze":16.0,"n":4,"inc":97.2,"inc2":95.1},"9":{"lav":0.0,"ret":0.0,"spett":0.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":0.0,"assenze":0.0,"n":1,"inc":0,"inc2":0}}},"RIETI":{"2025":{"1":{"lav":0.0,"ret":0.0,"spett":37.3,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":-33.3,"assenze":4.0,"n":2,"inc":0.0,"inc2":0.0},"2":{"lav":160.0,"ret":160.0,"spett":175.5,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":32.0,"fest_n":0.0,"banca":-11.0,"assenze":4.5,"n":2,"inc":91.2,"inc2":97.3},"5":{"lav":0.0,"ret":0.0,"spett":3.2,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":0.0,"assenze":3.2,"n":1,"inc":0.0,"inc2":0.0},"3":{"lav":183.0,"ret":183.0,"spett":164.7,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":32.0,"fest_n":0.0,"banca":18.3,"assenze":0.0,"n":1,"inc":111.1,"inc2":100.0},"4":{"lav":0.0,"ret":0.0,"spett":4.2,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":0.0,"assenze":4.2,"n":1,"inc":0.0,"inc2":0.0},"6":{"lav":171.0,"ret":171.0,"spett":184.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":48.0,"fest_n":0.0,"banca":-13.0,"assenze":0.0,"n":2,"inc":92.9,"inc2":100.0},"7":{"lav":0.0,"ret":0.0,"spett":34.7,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":-34.7,"assenze":0.0,"n":1,"inc":0.0,"inc2":0}},"2026":{"10":{"lav":2.0,"ret":2.0,"spett":8.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":-6.0,"assenze":0.0,"n":1,"inc":25.0,"inc2":100.0},"9":{"lav":5.0,"ret":5.0,"spett":43.3,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":-3.7,"assenze":34.7,"n":2,"inc":11.5,"inc2":12.6}}},"DROSSO":{"2025":{"1":{"lav":899.0,"ret":899.0,"spett":892.7,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":5.0,"fest_n":0.0,"banca":6.3,"assenze":0.0,"n":6,"inc":100.7,"inc2":100.0},"10":{"lav":412.0,"ret":412.0,"spett":412.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":0.0,"assenze":0.0,"n":3,"inc":100.0,"inc2":100.0},"2":{"lav":826.0,"ret":826.0,"spett":805.5,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":4.0,"fest_n":0.0,"banca":20.5,"assenze":0.0,"n":5,"inc":102.5,"inc2":100.0},"3":{"lav":1181.5,"ret":1181.5,"spett":1152.7,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":12.2,"fest_n":0.0,"banca":28.8,"assenze":0.0,"n":7,"inc":102.5,"inc2":100.0},"4":{"lav":645.5,"ret":645.5,"spett":633.3,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":21.0,"fest_n":0.0,"banca":12.2,"assenze":0.0,"n":4,"inc":101.9,"inc2":100.0},"6":{"lav":596.5,"ret":596.5,"spett":582.7,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":16.5,"fest_n":0.0,"banca":13.8,"assenze":0.0,"n":4,"inc":102.4,"inc2":100.0},"9":{"lav":320.0,"ret":320.0,"spett":329.3,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":-9.3,"assenze":0.0,"n":2,"inc":97.2,"inc2":100.0},"12":{"lav":311.5,"ret":311.5,"spett":304.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":8.0,"fest_n":0.0,"banca":7.5,"assenze":0.0,"n":2,"inc":102.5,"inc2":100.0},"8":{"lav":303.0,"ret":303.0,"spett":304.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":-1.0,"assenze":0.0,"n":2,"inc":99.7,"inc2":100.0},"7":{"lav":289.5,"ret":289.5,"spett":294.7,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":-5.2,"assenze":0.0,"n":2,"inc":98.2,"inc2":100.0}},"2026":{"1":{"lav":304.0,"ret":304.0,"spett":316.7,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":-12.7,"assenze":0.0,"n":2,"inc":96.0,"inc2":100.0},"10":{"lav":748.0,"ret":748.0,"spett":748.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":0.0,"assenze":0.0,"n":5,"inc":100.0,"inc2":100.0},"9":{"lav":654.5,"ret":654.5,"spett":645.7,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":8.8,"assenze":0.0,"n":4,"inc":101.4,"inc2":100.0}}},"PISA":{"2025":{"2":{"lav":475.5,"ret":475.5,"spett":429.8,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":42.0,"fest_n":0.0,"banca":45.8,"assenze":0.0,"n":3,"inc":110.6,"inc2":100.0},"1":{"lav":472.0,"ret":436.0,"spett":530.0,"giust":0.0,"nott":84.0,"rep_d":0.0,"rep_n":0.0,"fest_d":25.0,"fest_n":36.0,"banca":-58.0,"assenze":0.0,"n":4,"inc":89.1,"inc2":100.0},"4":{"lav":434.0,"ret":398.0,"spett":412.5,"giust":0.0,"nott":108.0,"rep_d":0.0,"rep_n":0.0,"fest_d":50.0,"fest_n":36.0,"banca":21.5,"assenze":0.0,"n":3,"inc":105.2,"inc2":100.0},"5":{"lav":275.0,"ret":275.0,"spett":279.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":20.0,"fest_n":0.0,"banca":-4.0,"assenze":0.0,"n":2,"inc":98.6,"inc2":100.0},"3":{"lav":475.0,"ret":451.0,"spett":481.8,"giust":0.0,"nott":72.0,"rep_d":0.0,"rep_n":0.0,"fest_d":13.0,"fest_n":24.0,"banca":-6.8,"assenze":0.0,"n":4,"inc":98.6,"inc2":100.0},"6":{"lav":295.5,"ret":283.5,"spett":145.7,"giust":0.0,"nott":60.0,"rep_d":0.0,"rep_n":0.0,"fest_d":30.0,"fest_n":12.0,"banca":-6.5,"assenze":0.0,"n":2,"inc":202.9,"inc2":100.0},"7":{"lav":421.0,"ret":397.0,"spett":429.0,"giust":0.0,"nott":157.0,"rep_d":0.0,"rep_n":0.0,"fest_d":30.0,"fest_n":24.0,"banca":-8.0,"assenze":0.0,"n":3,"inc":98.1,"inc2":100.0},"9":{"lav":156.0,"ret":144.0,"spett":0.0,"giust":0.0,"nott":48.0,"rep_d":0.0,"rep_n":0.0,"fest_d":24.0,"fest_n":12.0,"banca":-6.5,"assenze":0.0,"n":1,"inc":0,"inc2":100.0},"10":{"lav":276.5,"ret":264.5,"spett":282.0,"giust":0.0,"nott":96.5,"rep_d":0.0,"rep_n":0.0,"fest_d":24.0,"fest_n":12.0,"banca":-5.5,"assenze":0.0,"n":2,"inc":98.0,"inc2":100.0},"12":{"lav":182.0,"ret":182.0,"spett":152.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":24.5,"fest_n":0.0,"banca":30.0,"assenze":0.0,"n":1,"inc":119.7,"inc2":100.0}},"2026":{"1":{"lav":679.0,"ret":655.0,"spett":650.0,"giust":0.0,"nott":168.0,"rep_d":0.0,"rep_n":0.0,"fest_d":54.0,"fest_n":24.0,"banca":29.0,"assenze":0.0,"n":5,"inc":104.5,"inc2":100.0},"10":{"lav":842.8,"ret":818.8,"spett":738.0,"giust":0.0,"nott":96.0,"rep_d":0.0,"rep_n":0.0,"fest_d":24.0,"fest_n":24.0,"banca":104.8,"assenze":0.0,"n":7,"inc":114.2,"inc2":100.0},"9":{"lav":339.0,"ret":327.0,"spett":353.2,"giust":0.0,"nott":60.0,"rep_d":0.0,"rep_n":0.0,"fest_d":12.0,"fest_n":12.0,"banca":-14.2,"assenze":0.0,"n":3,"inc":96.0,"inc2":100.0}}},"LORANZE":{"2025":{"4":{"lav":162.0,"ret":162.0,"spett":158.3,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":36.0,"fest_n":0.0,"banca":3.7,"assenze":0.0,"n":1,"inc":102.3,"inc2":100.0},"12":{"lav":321.0,"ret":285.0,"spett":304.0,"giust":0.0,"nott":132.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":36.0,"banca":17.0,"assenze":0.0,"n":2,"inc":105.6,"inc2":100.0},"5":{"lav":204.0,"ret":168.0,"spett":225.0,"giust":0.0,"nott":168.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":36.0,"banca":33.0,"assenze":54.0,"n":2,"inc":90.7,"inc2":79.1},"3":{"lav":504.0,"ret":444.0,"spett":475.0,"giust":0.0,"nott":276.0,"rep_d":0.0,"rep_n":0.0,"fest_d":24.0,"fest_n":60.0,"banca":29.0,"assenze":0.0,"n":3,"inc":106.1,"inc2":100.0},"6":{"lav":155.0,"ret":155.0,"spett":200.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":-45.0,"assenze":0.0,"n":2,"inc":77.5,"inc2":100.0},"8":{"lav":152.0,"ret":152.0,"spett":152.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":0.0,"assenze":0.0,"n":1,"inc":100.0,"inc2":100.0},"2":{"lav":168.5,"ret":168.5,"spett":171.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":24.0,"fest_n":0.0,"banca":-2.5,"assenze":0.0,"n":1,"inc":98.5,"inc2":100.0}},"2026":{"1":{"lav":590.0,"ret":554.0,"spett":420.8,"giust":0.0,"nott":168.0,"rep_d":0.0,"rep_n":0.0,"fest_d":27.0,"fest_n":36.0,"banca":169.2,"assenze":0.0,"n":4,"inc":140.2,"inc2":100.0},"10":{"lav":151.0,"ret":151.0,"spett":152.0,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":0.0,"fest_n":0.0,"banca":-1.0,"assenze":0.0,"n":1,"inc":99.3,"inc2":100.0},"9":{"lav":341.0,"ret":341.0,"spett":327.2,"giust":0.0,"nott":0.0,"rep_d":0.0,"rep_n":0.0,"fest_d":42.0,"fest_n":0.0,"banca":13.8,"assenze":0.0,"n":3,"inc":104.2,"inc2":100.0}}}},
+
+HR_COSTI_ANNO: {"DROSSO":{"2023":{"costo":14607.0,"ore":634.0,"n":7},"2024":{"costo":26842.0,"ore":1282.0,"n":13},"2025":{"costo":36429.0,"ore":1694.0,"n":19}},"LORANZE":{"2023":{"costo":800.0,"ore":136.0,"n":1},"2024":{"costo":2164.0,"ore":0.0,"n":1},"2025":{"costo":11203.0,"ore":627.0,"n":8}},"MODENA":{"2023":{"costo":36689.0,"ore":1742.0,"n":20},"2024":{"costo":51142.0,"ore":2276.0,"n":26},"2025":{"costo":85310.0,"ore":3532.0,"n":46}},"PISA":{"2023":{"costo":3803.0,"ore":136.0,"n":2},"2024":{"costo":6028.0,"ore":272.0,"n":4},"2025":{"costo":31928.0,"ore":1661.0,"n":18}},"RIETI":{"2023":{"costo":2757.0,"ore":157.0,"n":2},"2024":{"costo":2919.0,"ore":168.0,"n":2},"2025":{"costo":2676.0,"ore":138.0,"n":2}},"VICENZA":{"2023":{"costo":7757.0,"ore":256.0,"n":5},"2024":{"costo":8388.0,"ore":326.0,"n":5},"2025":{"costo":28248.0,"ore":926.0,"n":17}},"VICO":{"2023":{"costo":26059.0,"ore":1210.0,"n":15},"2024":{"costo":26396.0,"ore":1221.0,"n":15},"2025":{"costo":20681.0,"ore":1063.0,"n":14}}},
+
+HR_COSTI_LIVELLO: {"B1":{"2025":73625.0,"2024":29552.0,"2023":21086.0},"n/d":{"2024":516.0,"2025":314.0,"2023":1316.0},"E1":{"2024":13414.0,"2025":9126.0,"2023":11716.0},"D3":{"2024":10781.0,"2023":10182.0,"2025":15579.0},"D2":{"2025":24822.0,"2023":7374.0,"2024":10215.0},"D1":{"2024":21032.0,"2025":41399.0,"2023":17728.0},"A1":{"2024":13459.0,"2023":6671.0,"2025":28588.0},"A2":{"2024":2164.0,"2025":2375.0},"C2":{"2024":10361.0,"2023":9583.0,"2025":9055.0},"C1":{"2025":11592.0,"2024":12385.0,"2023":6816.0}},
+
+HR_LIVELLI_CDC: {"DROSSO":{"A1":31,"A2":1,"C1":6,"D2":8,"E1":1,"n/d":6},"LORANZE":{"A1":5,"A2":1,"B1":7,"n/d":3},"MODENA":{"A1":5,"B1":66,"C1":10,"D1":42,"D2":8,"D3":10,"TR":1,"n/d":42},"PISA":{"A1":3,"B1":12,"D2":1,"E1":1,"n/d":7},"RIETI":{"D1":3,"D2":1,"n/d":13},"VICENZA":{"A1":1,"A2":1,"B1":12,"C1":1,"D1":7,"D2":2,"n/d":15},"VICO":{"A1":6,"C1":1,"C2":11,"D1":4,"D2":2,"E1":1,"n/d":3}},
+
+HR_MANSIONI_CDC: {"DROSSO":{"OPERATORE/TRICE CENTRO ACCOGLIE":31,"IMPIEGATO/A AMMINISTRATIVO/A":8,"COORDINATORE/TRICE":6,"n/d":6,"EDUCATORE/TRICE":1,"OPERATORE/TRICE LEGALE":1},"LORANZE":{"OPERATORE/TRICE CENTRO ACCOGLIE":5,"MEDIATORE/TRICE INTERCULTURALE":4,"OPERATORE/TRICE SOCIALE":3,"COORDINATORE/TRICE":2,"IMPIEGATO/A AMMINISTRATIVO/A":1,"n/d":1},"MODENA":{"OPERATORE/TRICE CENTRO ACCOGLIE":66,"COORDINATORE/TRICE":10,"n/d":42,"OPERATORE/TRICE SOCIALE":10,"IMPIEGATO/A AMMINISTRATIVO/A":8,"EDUCATORE/TRICE":5,"INFERMIERE/A":1,"DIRETTORE/TRICE":1},"PISA":{"OPERATORE/TRICE CENTRO ACCOGLIE":12,"n/d":7,"COORDINATORE/TRICE":3,"OPERATORE/TRICE LEGALE":1,"INFERMIERE/A":1,"MEDIATORE/TRICE INTERCULTURALE":1},"RIETI":{"n/d":13,"COORDINATORE/TRICE":2,"OPERATORE/TRICE SOCIALE":1,"IMPIEGATO/A AMMINISTRATIVO/A":1},"VICENZA":{"n/d":15,"OPERATORE/TRICE CENTRO ACCOGLIE":12,"COORDINATORE/TRICE":5,"IMPIEGATO/A AMMINISTRATIVO/A":2,"EDUCATORE/TRICE":2,"OPERATORE/TRICE SOCIALE":2,"OPERATORE/TRICE LEGALE":1},"VICO":{"OPERATORE/TRICE CENTRO ACCOGLIE":11,"COORDINATORE/TRICE":4,"OPERATORE/TRICE LEGALE":3,"n/d":3,"OPERATORE/TRICE SOCIALE":2,"MEDIATORE/TRICE INTERCULTURALE":2,"INFERMIERE/A":1}}
+};
+
+// ═══════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════
+const CDC_LIST = ['MODENA','DROSSO','VICO','PISA','VICENZA','LORANZE','RIETI'];
+const CDC_COLOR = {
+  MODENA:'#db2777', DROSSO:'#059669', VICO:'#ea580c',
+  PISA:'#2563eb',   VICENZA:'#0891b2', LORANZE:'#7c3aed', RIETI:'#d97706'
+};
+const LEV_COLOR = {
+  A1:'#059669',A2:'#34d399',B1:'#3b82f6',C1:'#7c3aed',C2:'#8b5cf6',
+  D1:'#d97706',D2:'#f59e0b',D3:'#fbbf24',E1:'#dc2626','n/d':'#94a3b8',TR:'#6b7280'
+};
+const MESI = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+const ANNO_COLORS = {'2023':'#94a3b8','2024':'#3b82f6','2025':'#059669','2026':'#f59e0b'};
+
+const charts = {};
+let ANNO = '2025'; // default — ultimo anno completo
+
+// ─── AUTO-DETECT last complete year ──────────────────────────
+(function detectDefaultAnno(){
+  // Conta mesi disponibili per anno su tutti i CDC
+  const mesiPerAnno = {};
+  CDC_LIST.forEach(cdc=>{
+    Object.entries(DA.HR_ORE_CDC[cdc]||{}).forEach(([a,mesi])=>{
+      mesiPerAnno[a] = (mesiPerAnno[a]||0) + Object.keys(mesi).length;
+    });
+  });
+  // Ultimo anno con mesi >= soglia (anni ordinati desc)
+  const sorted = Object.keys(mesiPerAnno).sort((a,b)=>b-a);
+  const threshold = Math.max(...Object.values(mesiPerAnno)) * 0.5;
+  for(const a of sorted){
+    if(mesiPerAnno[a] >= threshold){ ANNO = a; break; }
+  }
+  // Marca il bottone corretto come active
+  document.querySelectorAll('#pill-anno button').forEach(b=>{
+    b.classList.toggle('active', b.dataset.v === ANNO);
+  });
+})();
+
+// ─── Pill-anno click handler ──────────────────────────────────
+document.getElementById('pill-anno').addEventListener('click', e=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  document.querySelectorAll('#pill-anno button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  ANNO = btn.dataset.v;
+  renderAll();
+});
+
+function getAnno(){ return ANNO; }
+function getCdc(){  return document.getElementById('f-cdc').value; }
+
+// ─── Formatters ───────────────────────────────────────────────
+function fmtN(v){ return Math.round(v).toLocaleString('it-IT'); }
+function fmtK(v){ return v>=1000 ? (v/1000).toFixed(1)+'k' : Math.round(v)+''; }
+function fmtEuro(v){ return '€ '+Math.round(v).toLocaleString('it-IT'); }
+
+// ─── Chart helpers ────────────────────────────────────────────
+const FONT = { family:"system-ui,'Segoe UI',sans-serif", size:11 };
+const GRID = 'rgba(0,0,0,.06)';
+
+function destroyChart(id){ if(charts[id]){ charts[id].destroy(); delete charts[id]; } }
+
+function mkChart(id, type, labels, datasets, opts={}){
+  destroyChart(id);
+  const ctx = document.getElementById(id);
+  if(!ctx) return null;
+
+  const isBar = type==='bar' || type==='horizontalBar';
+  const realType = type==='horizontalBar' ? 'bar' : type;
+
+  const config = {
+    type: realType,
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,   // ← FIX: usa l'altezza del .chart-wrap
+      animation: { duration: 300 },
+      plugins: {
+        legend: {
+          position: opts.legendPos || 'top',
+          labels: { font:FONT, boxWidth:12, padding:10, usePointStyle:true, pointStyleWidth:8 }
+        },
+        tooltip: {
+          callbacks: {
+            label: opts.tooltipFn || (ctx=>`${ctx.dataset.label||''}: ${ctx.parsed.y!==undefined ? fmtN(ctx.parsed.y) : fmtN(ctx.parsed.x)}`)
+          }
+        }
+      },
+      scales: {}
+    }
+  };
+
+  if(isBar && type==='horizontalBar'){
+    config.options.indexAxis = 'y';
+    // x = asse valori, y = asse etichette; stacked va su entrambi
+    config.options.scales.x = { grid:{color:GRID}, ticks:{font:FONT, callback:v=>fmtK(v)}, beginAtZero:true, stacked:!!opts.stacked, ...(opts.x||{}) };
+    config.options.scales.y = { grid:{display:false}, ticks:{font:{...FONT,size:10}}, stacked:!!opts.stacked, ...(opts.y||{}) };
+  } else if(isBar){
+    config.options.scales.x = { grid:{display:false}, ticks:{font:FONT, maxRotation:opts.rotX||0}, stacked:!!opts.stacked };
+    config.options.scales.y = { grid:{color:GRID}, ticks:{font:FONT, callback:opts.yFmt||(v=>fmtK(v))}, beginAtZero:true, stacked:!!opts.stacked, ...(opts.y||{}) };
+  } else if(type==='line'){
+    config.options.scales.x = { grid:{color:GRID}, ticks:{font:FONT} };
+    config.options.scales.y = { grid:{color:GRID}, ticks:{font:FONT, callback:opts.yFmt||(v=>v)}, beginAtZero:false, ...(opts.y||{}) };
+  }
+
+  charts[id] = new Chart(ctx, config);
+  return charts[id];
+}
+
+// ─── Annos helper ─────────────────────────────────────────────
+function getAnnos(){
+  const a = getAnno();
+  if(a==='all'){
+    const s=new Set();
+    CDC_LIST.forEach(c=>Object.keys(DA.HR_ORE_CDC[c]||{}).forEach(y=>s.add(y)));
+    return [...s].sort();
+  }
+  return [a];
+}
+function getCdcs(){
+  const f=getCdc();
+  return f==='all' ? CDC_LIST : [f];
+}
+
+// ─── Ore per CdC per mese (anno selezionato) ──────────────────
+function renderOreMesi(){
+  const annos=getAnnos(), cdcs=getCdcs();
+  const ds = cdcs.map(cdc=>({
+    label: cdc,
+    data: MESI.map((_,i)=>{
+      const m=i+1;
+      return annos.reduce((s,a)=>s+(DA.HR_ORE_CDC[cdc]?.[a]?.[m]?.lav||0),0);
+    }),
+    backgroundColor: CDC_COLOR[cdc]+'bb',
+    borderColor: CDC_COLOR[cdc],
+    borderWidth:1, borderRadius:3
+  }));
+  mkChart('c-ore-mesi','bar',MESI,ds,{ legendPos:'bottom', rotX:0 });
+}
+
+// ─── Ore annuali per CdC ──────────────────────────────────────
+function renderOreAnni(){
+  const cdcs=getCdcs();
+  const anni=['2023','2024','2025','2026'].filter(a=>
+    cdcs.some(c=>Object.keys(DA.HR_ORE_CDC[c]||{}).includes(a))
+  );
+  const ds = anni.map(a=>({
+    label:a,
+    data:cdcs.map(cdc=>Object.values(DA.HR_ORE_CDC[cdc]?.[a]||{}).reduce((s,m)=>s+m.lav,0)),
+    backgroundColor:ANNO_COLORS[a]+'cc', borderColor:ANNO_COLORS[a], borderWidth:1, borderRadius:3
+  }));
+  mkChart('c-ore-anni','bar',cdcs,ds,{ legendPos:'bottom' });
+}
+
+// ─── Presenza Reale (line) — inc2 = lav/(lav+assenze_est)*100 ────
+function renderIncidenza(){
+  const annos=getAnnos(), cdcs=getCdcs();
+  const ds = cdcs.map(cdc=>({
+    label:cdc, type:'line',
+    data: MESI.map((_,i)=>{
+      const m=i+1;
+      let lav=0, assenze=0, hasData=false;
+      annos.forEach(a=>{
+        const mv=DA.HR_ORE_CDC[cdc]?.[a]?.[m];
+        if(mv){ lav+=mv.lav||0; assenze+=mv.assenze||0; hasData=true; }
+      });
+      if(!hasData) return null;
+      const tot=lav+assenze;
+      return tot>0 ? +((lav/tot*100).toFixed(1)) : null;
+    }),
+    borderColor:CDC_COLOR[cdc], backgroundColor:CDC_COLOR[cdc]+'20',
+    fill:false, tension:.3, spanGaps:true, pointRadius:4, pointHoverRadius:6, borderWidth:2
+  }));
+  // Linea 100% di riferimento (nessuna assenza)
+  ds.push({
+    label:'100% (nessuna assenza)',
+    data:Array(12).fill(100),
+    borderColor:'rgba(220,38,38,.5)', borderDash:[6,4],
+    borderWidth:1.5, pointRadius:0, fill:false
+  });
+
+  // Range dinamico: inc2 è sempre 0–100, mostra 60–102
+  const allVals = ds.flatMap(d=>d.data||[]).filter(v=>v!==null&&!isNaN(v)&&v>0);
+  const minV = allVals.length ? Math.max(0, Math.floor(Math.min(...allVals)/5)*5 - 3) : 60;
+  const maxV = 102;
+
+  mkChart('c-incidenza','line',MESI,ds,{
+    legendPos:'bottom',
+    y:{ min:minV, max:maxV, ticks:{ font:FONT, callback:v=>v+'%' } },
+    tooltipFn: ctx=>`${ctx.dataset.label}: ${ctx.parsed.y!==null?ctx.parsed.y.toFixed(1)+'% presenza reale':'n/d'}`
+  });
+}
+
+// ─── Ore notturne ─────────────────────────────────────────────
+function renderNotti(){
+  const annos=getAnnos(), cdcs=getCdcs();
+  // Mostra solo CdC con ore notturne > 0 per evitare bar vuote
+  const cdcsConNotti = cdcs.filter(cdc=>
+    MESI.some((_,i)=>annos.some(a=>DA.HR_ORE_CDC[cdc]?.[a]?.[i+1]?.nott>0))
+  );
+  if(!cdcsConNotti.length){
+    destroyChart('c-notti');
+    const ctx=document.getElementById('c-notti');
+    if(ctx){ ctx.getContext('2d').clearRect(0,0,ctx.width,ctx.height); }
+    return;
+  }
+  const ds = cdcsConNotti.map(cdc=>({
+    label:cdc,
+    data:MESI.map((_,i)=>{
+      const m=i+1;
+      return annos.reduce((s,a)=>s+(DA.HR_ORE_CDC[cdc]?.[a]?.[m]?.nott||0),0);
+    }),
+    backgroundColor:CDC_COLOR[cdc]+'bb', borderColor:CDC_COLOR[cdc], borderWidth:1, borderRadius:3
+  }));
+  mkChart('c-notti','bar',MESI,ds,{ legendPos:'bottom' });
+}
+
+// ─── Reperibilità (diurna + notturna) ────────────────────────
+function renderReperibilita(){
+  const annos=getAnnos(), cdcs=getCdcs();
+  const cdcsConRep = cdcs.filter(cdc=>
+    MESI.some((_,i)=>annos.some(a=>{
+      const m=DA.HR_ORE_CDC[cdc]?.[a]?.[i+1];
+      return m && (m.rep_d+m.rep_n)>0;
+    }))
+  );
+  if(!cdcsConRep.length){
+    destroyChart('c-reperibilita');
+    const ctx=document.getElementById('c-reperibilita');
+    if(ctx){
+      const c=ctx.getContext('2d'); c.clearRect(0,0,ctx.width,ctx.height);
+      const wrap=ctx.parentElement; wrap.innerHTML=`<div class="no-data"><span class="ico">📡</span><p>Nessuna reperibilità registrata per l'anno/CdC selezionato</p></div>`;
+    }
+    destroyChart('c-nott-vs-rep');
+    const ctx2=document.getElementById('c-nott-vs-rep');
+    if(ctx2){ const wrap=ctx2.parentElement; wrap.innerHTML=`<div class="no-data"><span class="ico">📡</span><p>Dati non disponibili per la selezione corrente</p></div>`; }
+    return;
+  }
+  // Grafico 1: Rep totale (D+N) per CdC per mese
+  const ds1 = cdcsConRep.map(cdc=>({
+    label: cdc,
+    data: MESI.map((_,i)=>{
+      const m=i+1;
+      return annos.reduce((s,a)=>{
+        const v=DA.HR_ORE_CDC[cdc]?.[a]?.[m];
+        return s+((v?.rep_d||0)+(v?.rep_n||0));
+      },0);
+    }),
+    backgroundColor: CDC_COLOR[cdc]+'bb',
+    borderColor: CDC_COLOR[cdc], borderWidth:1, borderRadius:3
+  }));
+  mkChart('c-reperibilita','bar',MESI,ds1,{
+    legendPos:'bottom',
+    tooltipFn:ctx=>`${ctx.dataset.label}: ${fmtN(ctx.parsed.y)}h rep.`
+  });
+
+  // Grafico 2: Notturno vs Rep.Notturna per MODENA
+  const cdc2 = cdcsConRep.includes('MODENA') ? 'MODENA' : cdcsConRep[0];
+  const ds2 = [
+    {
+      label:'Notturno lavorato',
+      data: MESI.map((_,i)=>annos.reduce((s,a)=>s+(DA.HR_ORE_CDC[cdc2]?.[a]?.[i+1]?.nott||0),0)),
+      backgroundColor:'#3b82f6bb', borderColor:'#3b82f6', borderWidth:1, borderRadius:3
+    },
+    {
+      label:'Reperibilità Notturna',
+      data: MESI.map((_,i)=>annos.reduce((s,a)=>s+(DA.HR_ORE_CDC[cdc2]?.[a]?.[i+1]?.rep_n||0),0)),
+      backgroundColor:'#f59e0bbb', borderColor:'#f59e0b', borderWidth:1, borderRadius:3
+    },
+    {
+      label:'Reperibilità Diurna',
+      data: MESI.map((_,i)=>annos.reduce((s,a)=>s+(DA.HR_ORE_CDC[cdc2]?.[a]?.[i+1]?.rep_d||0),0)),
+      backgroundColor:'#10b981bb', borderColor:'#10b981', borderWidth:1, borderRadius:3
+    }
+  ];
+  mkChart('c-nott-vs-rep','bar',MESI,ds2,{
+    legendPos:'bottom', stacked:false,
+    tooltipFn:ctx=>`${ctx.dataset.label}: ${fmtN(ctx.parsed.y)}h`
+  });
+}
+
+// ─── Costi CdC (grouped anni) ─────────────────────────────────
+function renderCostiCdc(){
+  const cdcs=getCdcs();
+  const anni=['2023','2024','2025'];
+  const ds = anni.map(a=>({
+    label:a,
+    data:cdcs.map(cdc=>HR.HR_COSTI_ANNO[cdc]?.[a]?.costo||0),
+    backgroundColor:ANNO_COLORS[a]+'cc', borderColor:ANNO_COLORS[a], borderWidth:1, borderRadius:3
+  }));
+  mkChart('c-costi-cdc','bar',cdcs,ds,{
+    legendPos:'bottom',
+    yFmt:v=>'€'+fmtK(v),
+    tooltipFn:ctx=>`${ctx.dataset.label}: ${fmtEuro(ctx.parsed.y)}`
+  });
+}
+
+// ─── Costo orario ─────────────────────────────────────────────
+function renderCostoOrario(){
+  const cdcs=getCdcs();
+  const anni=['2023','2024','2025'];
+  const ds = anni.map(a=>({
+    label:a,
+    data:cdcs.map(cdc=>{
+      const d=HR.HR_COSTI_ANNO[cdc]?.[a];
+      return d&&d.ore>0 ? +((d.costo/d.ore).toFixed(2)) : 0;
+    }),
+    backgroundColor:ANNO_COLORS[a]+'cc', borderColor:ANNO_COLORS[a], borderWidth:1, borderRadius:3
+  }));
+  mkChart('c-costo-orario','bar',cdcs,ds,{
+    legendPos:'bottom',
+    yFmt:v=>'€'+v,
+    tooltipFn:ctx=>`${ctx.dataset.label}: €${ctx.parsed.y}/h`
+  });
+}
+
+// ─── Organico per livello (stacked horizontal) ────────────────
+function renderOrganicoLivello(){
+  const cdcs=getCdcs();
+  const levSet=new Set();
+  cdcs.forEach(c=>Object.keys(HR.HR_LIVELLI_CDC[c]||{}).forEach(l=>levSet.add(l)));
+  const levs=[...levSet].filter(l=>l!=='n/d').sort().concat(['n/d']);
+
+  const ds = levs.map(l=>({
+    label:l,
+    data:cdcs.map(c=>HR.HR_LIVELLI_CDC[c]?.[l]||0),
+    backgroundColor:(LEV_COLOR[l]||'#94a3b8')+'cc',
+    borderColor:LEV_COLOR[l]||'#94a3b8', borderWidth:1
+  }));
+  // REFACTOR UX (mag 2026): rimosso stacked:true (i livelli erano sovrapposti).
+  // Grouped bar rende confrontabili i livelli per ciascun CdC senza occultare i bassi.
+  mkChart('c-organico-livello','bar',cdcs,ds,{
+    legendPos:'right',
+    tooltipFn:ctx=>`${ctx.dataset.label}: ${ctx.parsed.y} contratti`
+  });
+}
+
+// ─── Costi per livello (grouped anni) ────────────────────────
+function renderCostiLivello(){
+  const levs=Object.keys(HR.HR_COSTI_LIVELLO).filter(l=>l!=='n/d').sort();
+  const anni=['2023','2024','2025'];
+  const ds = anni.map(a=>({
+    label:a,
+    data:levs.map(l=>HR.HR_COSTI_LIVELLO[l]?.[a]||0),
+    backgroundColor:ANNO_COLORS[a]+'cc', borderColor:ANNO_COLORS[a], borderWidth:1, borderRadius:2
+  }));
+  mkChart('c-costi-livello','bar',levs,ds,{
+    legendPos:'bottom',
+    yFmt:v=>'€'+fmtK(v),
+    tooltipFn:ctx=>`${ctx.dataset.label}: ${fmtEuro(ctx.parsed.y)}`
+  });
+}
+
+// ─── Mansioni (horizontal bar) ────────────────────────────────
+function renderMansioni(){
+  const cdcs=getCdcs();
+  const ALIAS = {
+    'OPERATORE/TRICE CENTRO ACCOGLIE':'Op. Centro Accoglienza',
+    'MEDIATORE/TRICE INTERCULTURALE':'Mediatore Interculturale',
+    'IMPIEGATO/A AMMINISTRATIVO/A':'Impiegato Amm.vo',
+    'COORDINATORE/TRICE':'Coordinatore',
+    'OPERATORE/TRICE SOCIALE':'Op. Sociale',
+    'OPERATORE/TRICE LEGALE':'Op. Legale',
+    'EDUCATORE/TRICE':'Educatore',
+    'INFERMIERE/A':'Infermiere',
+    'DIRETTORE/TRICE':'Direttore',
+    'n/d':'N/D'
+  };
+  const manSet=new Set();
+  cdcs.forEach(c=>Object.keys(HR.HR_MANSIONI_CDC[c]||{}).filter(m=>m!=='n/d').forEach(m=>manSet.add(m)));
+  const mans=[...manSet];
+  // Ordina per totale desc
+  mans.sort((a,b)=>cdcs.reduce((s,c)=>s+(HR.HR_MANSIONI_CDC[c]?.[b]||0),0)-cdcs.reduce((s,c)=>s+(HR.HR_MANSIONI_CDC[c]?.[a]||0),0));
+  const top=mans.slice(0,8);
+
+  const COLORS=['#3b82f6','#059669','#7c3aed','#d97706','#0891b2','#db2777','#ea580c','#6b7280'];
+  const ds=cdcs.map((cdc,i)=>({
+    label:cdc,
+    data:top.map(m=>HR.HR_MANSIONI_CDC[cdc]?.[m]||0),
+    backgroundColor:CDC_COLOR[cdc]+'cc',
+    borderColor:CDC_COLOR[cdc], borderWidth:1, borderRadius:2
+  }));
+
+  // REFACTOR UX (mag 2026): da horizontal stacked → heatmap mansione × CdC.
+  // L'horizontal stacked con 8 mansioni × 8 CdC era caotico; la heatmap rende
+  // confrontabile sia in riga (CdC) che in colonna (mansione).
+  const labels=top.map(m=>ALIAS[m]||m);
+  renderMansioniHeatmap(labels, top, cdcs);
+}
+
+function renderMansioniHeatmap(labels, mansKeys, cdcs) {
+  const canvas = document.getElementById('c-mansioni');
+  if (!canvas) return;
+  let wrap = document.getElementById('c-mansioni-heat');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.id = 'c-mansioni-heat';
+    wrap.style.cssText = 'overflow-x:auto;font-size:11px;padding:6px 0;';
+    canvas.parentElement.style.height = 'auto';
+    canvas.parentElement.appendChild(wrap);
+    canvas.style.display = 'none';
+  }
+  // Calcola scala max
+  const allVals = [];
+  cdcs.forEach(c => mansKeys.forEach(m => allVals.push(HR.HR_MANSIONI_CDC[c]?.[m] || 0)));
+  const maxV = Math.max(...allVals, 1);
+  const cellColor = (v) => {
+    const t = Math.min(v / maxV, 1);
+    const hue = 220 - 220 * t; // blu (basso) → giallo → rosso (alto)
+    return `hsla(${hue},65%,45%,${0.15 + t*0.55})`;
+  };
+  let html = '<table style="border-collapse:separate;border-spacing:2px;width:100%;font-size:11px;">';
+  html += '<thead><tr>';
+  html += `<th style="text-align:left;padding:4px 8px;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;">Mansione</th>`;
+  cdcs.forEach(c => {
+    html += `<th style="text-align:center;padding:4px 8px;min-width:70px;font-size:10px;color:${CDC_COLOR[c]||'#94a3b8'};text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid ${CDC_COLOR[c]||'#94a3b8'};">${c}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+  mansKeys.forEach((m, idx) => {
+    html += `<tr><td style="padding:6px 8px;font-weight:600;color:var(--text1);font-size:11px;">${labels[idx]}</td>`;
+    cdcs.forEach(c => {
+      const v = HR.HR_MANSIONI_CDC[c]?.[m] || 0;
+      const bg = cellColor(v);
+      const txt = v > 0 ? v : '—';
+      const fw = v > maxV * 0.5 ? 800 : 600;
+      html += `<td style="background:${bg};padding:6px 8px;text-align:center;border-radius:4px;font-weight:${fw};color:${v>maxV*0.6?'#fff':'var(--text1)'};">${txt}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  html += `<div style="margin-top:8px;display:flex;align-items:center;gap:8px;font-size:10px;color:var(--text3);">
+    <span>Contratti:</span>
+    <div style="height:8px;flex:1;max-width:200px;border-radius:4px;background:linear-gradient(90deg,hsla(220,65%,45%,.15),hsla(110,65%,45%,.4),hsla(0,65%,45%,.7));"></div>
+    <span>0</span><span style="margin-left:auto;">${maxV}</span>
+  </div>`;
+  wrap.innerHTML = html;
+}
+
+// ─── KPI ──────────────────────────────────────────────────────
+function renderKPI(){
+  const annos=getAnnos(), cdcs=getCdcs();
+  let totLav=0,totRet=0,totCosto=0,totOreCP=0;
+  const annoPrec = ANNO==='all'?null:String(parseInt(ANNO)-1);
+  let prevLav=0,prevCosto=0;
+
+  cdcs.forEach(cdc=>{
+    annos.forEach(a=>{
+      Object.values(DA.HR_ORE_CDC[cdc]?.[a]||{}).forEach(m=>{totLav+=m.lav;totRet+=m.ret;});
+    });
+    if(annoPrec) Object.values(DA.HR_ORE_CDC[cdc]?.[annoPrec]||{}).forEach(m=>prevLav+=m.lav);
+
+    annos.forEach(a=>{ const d=HR.HR_COSTI_ANNO[cdc]?.[a]; if(d){totCosto+=d.costo;totOreCP+=d.ore;} });
+    if(annoPrec){ const d=HR.HR_COSTI_ANNO[cdc]?.[annoPrec]; if(d) prevCosto+=d.costo; }
+  });
+
+  // Presenza Reale: lav / (lav + assenze_retribuite_est)
+  let totAssenze=0, totRepN=0, totRepD=0;
+  cdcs.forEach(cdc=>annos.forEach(a=>Object.values(DA.HR_ORE_CDC[cdc]?.[a]||{}).forEach(m=>{
+    totAssenze+=(m.assenze||0);
+    totRepN   +=(m.rep_n||0);
+    totRepD   +=(m.rep_d||0);
+  })));
+  const totPagato = totLav + totAssenze;
+  const incidenza = totPagato>0?(totLav/totPagato*100):0;
+  const euroH = totOreCP>0?totCosto/totOreCP:0;
+  const totRep = totRepN+totRepD;
+
+  function delta(curr,prev){
+    if(!prev||!curr) return '';
+    const pct=((curr-prev)/prev*100);
+    const up=pct>=0, cl=up?'up':'down', ar=up?'▲':'▼';
+    return `<div class="delta ${cl}">${ar} ${Math.abs(pct).toFixed(1)}% vs ${annoPrec}</div>`;
+  }
+
+  const nCdc = cdcs.filter(c=>annos.some(a=>DA.HR_ORE_CDC[c]?.[a])).length;
+  const kpis = [
+    { l:'Ore Lavorate',      v:fmtN(totLav),    s:`+${fmtN(Math.round(totAssenze))}h assenze est.`, d:delta(totLav,prevLav) },
+    { l:'Presenza Reale',   v:incidenza.toFixed(1)+'%', s:'Lav.÷(Lav.+Assenze est.)', d:'' },
+    { l:'Reperibilità Totale',v:totRep>0?fmtN(totRep)+'h':'–', s:`Not. ${fmtN(totRepN)}h · Diur. ${fmtN(totRepD)}h`, d:'' },
+    { l:'Costo Personale',   v:fmtEuro(totCosto), s:'subset abbinato SR', d:delta(totCosto,prevCosto) },
+    { l:'Costo Orario Medio',v:totOreCP>0?'€'+euroH.toFixed(2):'n/d', s:'Costo÷Ore (CP)', d:'' },
+    { l:'Contratti SR',      v:cdcs.reduce((s,c)=>s+Object.values(HR.HR_LIVELLI_CDC[c]||{}).reduce((a,b)=>a+b,0),0), s:'CdC selezionati', d:'' },
+  ];
+  document.getElementById('kpi-grid').innerHTML = kpis.map(k=>`
+    <div class="hr-kpi">
+      <div class="lbl">${k.l}</div>
+      <div class="val">${k.v}</div>
+      <div class="sub">${k.s}</div>
+      ${k.d}
+    </div>`).join('');
+}
+
+// ─── Tabella ──────────────────────────────────────────────────
+function renderTabella(){
+  const annos=getAnnos(), cdcs=getCdcs();
+  const rows=cdcs.map(cdc=>{
+    let lav=0,assenze=0,rep=0,banca=0,costo=0,ore=0;
+    annos.forEach(a=>{
+      Object.values(DA.HR_ORE_CDC[cdc]?.[a]||{}).forEach(m=>{
+        lav+=m.lav; assenze+=(m.assenze||0);
+        rep+=(m.rep_d||0)+(m.rep_n||0);
+        banca+=(m.banca||0);
+      });
+      const d=HR.HR_COSTI_ANNO[cdc]?.[a]; if(d){costo+=d.costo;ore+=d.ore;}
+    });
+    const nK = Object.values(HR.HR_LIVELLI_CDC[cdc]||{}).reduce((s,n)=>s+n,0);
+    const totPag=lav+assenze;
+    const inc = totPag>0?(lav/totPag*100).toFixed(1):'–';
+    const euroH = ore>0&&costo>0?(costo/ore).toFixed(2):'–';
+    const repStr = rep>0 ? `<span style="color:#0891b2;font-weight:700">${fmtN(rep)}h</span>` : '<span style="color:var(--text3)">–</span>';
+    // banca ore: positivo = accumulo, negativo = smaltimento
+    const bancaColor = banca>0?'#d97706':banca<0?'#059669':'var(--text3)';
+    const bancaStr = Math.abs(banca)>0.5 ? `<span style="color:${bancaColor};font-weight:700">${banca>0?'+':''}${Math.round(banca)}h</span>` : '<span style="color:var(--text3)">≈0</span>';
+    return `<tr>
+      <td><span class="cdc-pill p-${cdc.toLowerCase()}">${cdc}</span></td>
+      <td class="num">${fmtN(lav)}</td>
+      <td class="num">${assenze>0?'<span style="color:#dc2626;font-weight:700">'+Math.round(assenze)+'h</span>':'<span style="color:var(--text3)">–</span>'}</td>
+      <td class="num">${inc}%</td>
+      <td class="num">${bancaStr}</td>
+      <td class="num">${repStr}</td>
+      <td class="num euro">${costo>0?fmtEuro(costo):'–'}</td>
+      <td class="num euro-h">${euroH!=='–'?'€'+euroH+'/h':'–'}</td>
+      <td class="num">${nK}</td>
+    </tr>`;
+  });
+  document.getElementById('tbl-body').innerHTML=rows.join('');
+}
+
+// ─── Label periodo ────────────────────────────────────────────
+function updatePeriodoLabel(){
+  const a=getAnno(), cdc=getCdc();
+  const mesiDisp = a==='all' ? 'Tutti gli anni' :
+    (() => {
+      const msi=new Set();
+      getCdcs().forEach(c=>Object.keys(DA.HR_ORE_CDC[c]?.[a]||{}).map(Number).forEach(m=>msi.add(m)));
+      const arr=[...msi].sort((a,b)=>a-b);
+      return arr.length?`${MESI[arr[0]-1]}–${MESI[arr[arr.length-1]-1]} ${a} (${arr.length} mesi)`:a;
+    })();
+  document.getElementById('lbl-periodo').textContent = mesiDisp;
+}
+
+// ─── Render all ───────────────────────────────────────────────
+function renderAll(){
+  updatePeriodoLabel();
+  renderKPI();
+  renderOreMesi();
+  renderOreAnni();
+  renderIncidenza();
+  renderNotti();
+  renderReperibilita();
+  renderCostiCdc();
+  renderCostoOrario();
+  renderOrganicoLivello();
+  renderCostiLivello();
+  renderMansioni();
+  renderTabella();
+}
+
+// ─── MANSIONI RAGGRUPPATE PER CATEGORIA CAPITOLATO ──────────────────────────
+async function renderMansioniGrouped() {
+  const grid = document.getElementById('mansioni-grouped');
+  if (!grid || !window.LIVE?.getMappaturaMansioni) return;
+  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:14px;color:var(--text3);font-size:11px;">⏳ Caricamento mapping Zoho…</div>';
+
+  try {
+    const m = await window.LIVE.getMappaturaMansioni();
+    if (!m?.records) throw new Error('no records');
+    // Aggreghiamo per categoria (CC + CAD combined → mansioni union)
+    const byCat = {};
+    for (const r of m.records) {
+      const c = r.categoria;
+      if (!byCat[c]) byCat[c] = { mansioni: new Set(), overrides: new Set() };
+      for (const mz of (r.mansioni_zoho||[])) byCat[c].mansioni.add(mz);
+      for (const ov of (r.overrides_applicati||[])) byCat[c].overrides.add(ov);
+    }
+    const colors = {
+      'OPERATORE DIURNO':'#3b82f6','OPERATORE NOTTURNO':'#6366f1','DIRETTORE':'#8b5cf6',
+      'AMMINISTRATIVO':'#0891b2','INFERMIERE':'#06b6d4','MEDICO':'#10b981',
+      'OPERATORE SOCIALE':'#f59e0b','MEDIATORE LINGUISTICO':'#ec4899'
+    };
+    const order = m.categorie_capitolato || Object.keys(byCat);
+    grid.innerHTML = order.map(cat => {
+      const data = byCat[cat] || { mansioni:new Set(), overrides:new Set() };
+      const mansList = [...data.mansioni];
+      const overrSet = data.overrides;
+      const color = colors[cat] || '#94a3b8';
+      const items = mansList.map(name => {
+        const isOver = overrSet.has(name);
+        return `<li style="font-size:10.5px;color:${isOver?'#fbbf24':'var(--text2)'};margin-bottom:2px;">
+          ${isOver?'⚡ ':''}${name}${isOver?' <span style="font-size:9px;color:#fbbf24;">(override)</span>':''}
+        </li>`;
+      }).join('');
+      return `
+        <div style="background:rgba(15,23,42,.5);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:12px 14px;border-left:3px solid ${color};">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div style="font-size:11px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:.04em;">${cat}</div>
+            <div style="font-size:18px;font-weight:800;color:var(--text1);">${mansList.length}</div>
+          </div>
+          <ul style="list-style:none;padding-left:0;margin:0;max-height:120px;overflow-y:auto;">${items || '<li style="font-size:10px;color:var(--text3);">— nessuna mansione mappata —</li>'}</ul>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    grid.innerHTML = `<div style="grid-column:1/-1;color:#f87171;font-size:11px;">⚠️ Errore: ${e.message||e}</div>`;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  renderAll();
+  renderMansioniGrouped();
+  const badge=document.getElementById('data-badge');
+  if(badge){ badge.textContent='● HR Analytics · Zoho Creator'; badge.className='data-badge live'; }
+});
+</script>
+</body>
+</html>

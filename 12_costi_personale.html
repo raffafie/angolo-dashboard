@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="athena-static-only" content="true"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Costi Personale — Dashboard Analytics</title>
+<link rel="stylesheet" href="shared/style.css?v=20260525-1800">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+
+/* ── KPI Grid ────────────────────────────────────────────── */
+.kpi-grid {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
+  gap:14px; margin-bottom:26px;
+}
+.kpi-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius-lg); padding:18px 16px;
+  border-top:3px solid var(--accent); box-shadow:var(--shadow);
+  transition:box-shadow .15s;
+}
+.kpi-card:nth-child(2) { border-top-color:var(--emerald); }
+.kpi-card:nth-child(3) { border-top-color:var(--amber); }
+.kpi-card:nth-child(4) { border-top-color:var(--violet); }
+.kpi-card:nth-child(5) { border-top-color:var(--cyan); }
+.kpi-card:nth-child(6) { border-top-color:var(--pink); }
+.kpi-card:hover { box-shadow:var(--shadow-md); }
+.kpi-card .lbl { font-size:10px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.6px; color:var(--text3); margin-bottom:7px; }
+.kpi-card .val { font-size:26px; font-weight:800; color:var(--text); line-height:1; }
+.kpi-card .sub { font-size:11px; color:var(--text3); margin-top:5px; }
+.kpi-card .delta { font-size:11px; font-weight:600; margin-top:6px; display:flex; align-items:center; gap:3px; }
+.kpi-card .delta.up   { color:var(--emerald); }
+.kpi-card .delta.down { color:var(--red); }
+.kpi-card .delta.neu  { color:var(--text3); }
+
+/* ── Section headers ─────────────────────────────────────── */
+.sec-hdr {
+  display:flex; align-items:center; gap:10px;
+  margin:32px 0 16px; padding-bottom:10px;
+  border-bottom:2px solid var(--border);
+}
+.sec-hdr .ico { font-size:18px; }
+.sec-hdr h2 { font-size:14px; font-weight:800; color:var(--text); margin:0; }
+.sec-hdr .badge {
+  font-size:10px; font-weight:700; letter-spacing:.4px;
+  padding:2px 9px; border-radius:20px; text-transform:uppercase;
+}
+.b-blue   { background:var(--accent-bg); color:var(--accent); }
+.b-green  { background:var(--emerald-bg); color:var(--emerald); }
+.b-amber  { background:var(--amber-bg); color:var(--amber); }
+.b-violet { background:var(--violet-bg); color:var(--violet); }
+.b-cyan   { background:var(--cyan-bg); color:var(--cyan); }
+
+/* ── Data Note ───────────────────────────────────────────── */
+.data-note {
+  display:flex; align-items:flex-start; gap:10px;
+  background:var(--amber-bg); border:1px solid #fde68a;
+  border-radius:var(--radius-lg); padding:12px 16px;
+  margin-bottom:20px; font-size:12px; color:var(--text2); line-height:1.6;
+}
+.data-note .dn-ico { font-size:16px; flex-shrink:0; margin-top:1px; }
+.data-note strong { color:var(--amber); }
+
+/* ── Chart containers ─────────────────────────────────────── */
+.chart-grid-2 {
+  display:grid; grid-template-columns:1fr 1fr;
+  gap:16px; margin-bottom:20px;
+}
+.chart-grid-3 {
+  display:grid; grid-template-columns:1fr 1fr 1fr;
+  gap:16px; margin-bottom:20px;
+}
+@media(max-width:900px){
+  .chart-grid-2 { grid-template-columns:1fr; }
+  .chart-grid-3 { grid-template-columns:1fr 1fr; }
+}
+@media(max-width:600px){
+  .chart-grid-3 { grid-template-columns:1fr; }
+}
+.chart-box {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius-lg); padding:18px;
+  box-shadow:var(--shadow);
+}
+.chart-box .ch-title {
+  font-size:12px; font-weight:700; color:var(--text2);
+  text-transform:uppercase; letter-spacing:.4px; margin-bottom:14px;
+}
+.chart-box canvas { display:block; }
+/* ── FIX CRITICO: wrapper con altezza esplicita per Chart.js ── */
+.chart-wrap { position:relative; height:240px; width:100%; }
+.chart-wrap.h200 { height:200px; }
+.chart-wrap.h220 { height:220px; }
+.chart-wrap.h260 { height:260px; }
+
+/* ── NC Voce Contabile table ─────────────────────────────── */
+.nc-table-wrap {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--shadow);
+  margin-bottom:20px;
+}
+.nc-table { width:100%; border-collapse:collapse; font-size:13px; }
+.nc-table th {
+  background:var(--surface2); font-size:10px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.5px; color:var(--text3);
+  padding:10px 16px; text-align:left; border-bottom:1px solid var(--border);
+}
+.nc-table td { padding:11px 16px; border-bottom:1px solid var(--border); color:var(--text); }
+.nc-table tr:last-child td { border-bottom:none; }
+.nc-table tr:hover td { background:var(--surface2); }
+.nc-table .pct-bar {
+  display:flex; align-items:center; gap:8px;
+}
+.nc-table .bar-bg {
+  flex:1; height:6px; background:var(--border);
+  border-radius:4px; overflow:hidden;
+}
+.nc-table .bar-fill { height:100%; border-radius:4px; }
+.nc-table .pct-val { font-size:11px; color:var(--text3); min-width:36px; text-align:right; }
+.nc-table .total-row td { font-weight:700; background:var(--surface2); border-top:2px solid var(--border); }
+.costo-val { font-variant-numeric:tabular-nums; font-weight:600; }
+
+/* ── Join Chain ───────────────────────────────────────────── */
+.join-chain {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius-lg); padding:18px 20px; box-shadow:var(--shadow);
+}
+.join-chain .chain-title {
+  font-size:11px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.5px; color:var(--text3); margin-bottom:14px;
+}
+.chain-steps {
+  display:flex; flex-wrap:wrap; align-items:center; gap:6px;
+}
+.chain-step {
+  background:var(--accent-bg); border:1px solid #bfdbfe;
+  border-radius:6px; padding:5px 12px;
+  font-size:12px; font-weight:600; color:var(--accent);
+}
+.chain-step.green {
+  background:var(--emerald-bg); border-color:#a7f3d0; color:var(--emerald);
+}
+.chain-step.amber {
+  background:var(--amber-bg); border-color:#fde68a; color:var(--amber);
+}
+.chain-arrow { color:var(--text3); font-size:14px; font-weight:700; }
+.chain-note { font-size:11px; color:var(--text3); margin-top:10px; line-height:1.6; }
+
+/* ── Trend pills ─────────────────────────────────────────── */
+.trend-pill {
+  display:inline-flex; align-items:center; gap:4px;
+  font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px;
+}
+.trend-up   { background:var(--emerald-bg); color:var(--emerald); }
+.trend-down { background:var(--red-bg); color:var(--red); }
+.trend-neu  { background:var(--surface2); color:var(--text3); }
+
+/* ── Year selector ───────────────────────────────────────── */
+.year-tabs {
+  display:flex; gap:4px; background:var(--surface2);
+  border:1px solid var(--border); border-radius:8px; padding:3px;
+  width:fit-content; margin-bottom:18px;
+}
+.year-tabs button {
+  border:none; border-radius:6px; padding:5px 16px;
+  font-size:12px; font-weight:600; cursor:pointer;
+  background:transparent; color:var(--text2); transition:all .15s;
+}
+.year-tabs button.active {
+  background:var(--accent); color:#fff; box-shadow:0 1px 4px rgba(37,99,235,.3);
+}
+
+/* ── Small stat row ──────────────────────────────────────── */
+.stat-row {
+  display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px;
+}
+.stat-chip {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius); padding:10px 16px;
+  display:flex; flex-direction:column; gap:3px;
+  box-shadow:var(--shadow); min-width:120px;
+}
+.stat-chip .sc-lbl { font-size:10px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.5px; color:var(--text3); }
+.stat-chip .sc-val { font-size:18px; font-weight:800; color:var(--text); }
+.stat-chip .sc-sub { font-size:11px; color:var(--text3); }
+
+</style>
+</head>
+<body data-page="costi-pers">
+<div id="topbar"></div>
+<div id="data-mode-bar" class="data-bar static mb-16"><span class="dot"></span>Dati statici · Costo Personale dicembre 2023–2025 · Nota Contabile 241.632 record</div>
+
+<div class="main">
+
+  <!-- DATA NOTE -->
+  <div class="data-note">
+    <span class="dn-ico">⚠️</span>
+    <div>
+      <strong>Nota sui dati:</strong> La tabella <em>Costo Personale</em> (Zoho Analytics) registra esclusivamente dati di <strong>fine anno (dicembre)</strong>.
+      I valori mostrati sono riferimenti annuali (costi cumulati al 31/12). La sezione <em>Nota Contabile</em> mostra la composizione per voce
+      su un campione di <strong>gennaio 2024</strong> (8 lavoratori, Gruppo 72). La tabella <em>Nota Contabile</em> contiene <strong>241.632 record</strong>
+      totali — il filtro WHERE via <code>zoho_client_v2</code> è ora operativo e consente analisi complete da Python/Athena.
+    </div>
+  </div>
+
+  <!-- ═══ SEZIONE 1: KPI ANNUALI ═══ -->
+  <div class="sec-hdr">
+    <span class="ico">💰</span>
+    <h2>KPI Annuali — Riferimento Dicembre</h2>
+    <span class="badge b-blue">Anno corrente: 2025</span>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="lbl">Costo Totale 2025</div>
+      <div class="val">€ 504K</div>
+      <div class="sub">Dicembre 2025 · anno in corso</div>
+      <div class="delta up">▲ +7.7% vs 2024</div>
+    </div>
+    <div class="kpi-card">
+      <div class="lbl">Lavoratori 2025</div>
+      <div class="val">189</div>
+      <div class="sub">Teste in organico (dic 2025)</div>
+      <div class="delta up">▲ +11.2% vs 2024</div>
+    </div>
+    <div class="kpi-card">
+      <div class="lbl">Ore Lavorate 2025</div>
+      <div class="val">22.232</div>
+      <div class="sub">Ore totali dicembre 2025</div>
+      <div class="delta up">▲ +8.9% vs 2024</div>
+    </div>
+    <div class="kpi-card">
+      <div class="lbl">Costo Orario 2025</div>
+      <div class="val">€ 22,70</div>
+      <div class="sub">€/h medio dicembre 2025</div>
+      <div class="delta down">▼ -1.1% vs 2024</div>
+    </div>
+    <div class="kpi-card">
+      <div class="lbl">Costo Orario 2024</div>
+      <div class="val">€ 22,95</div>
+      <div class="sub">€/h medio dicembre 2024</div>
+      <div class="delta up">▲ +1.1% vs 2023</div>
+    </div>
+    <div class="kpi-card">
+      <div class="lbl">Crescita Organico</div>
+      <div class="val">+31%</div>
+      <div class="sub">2023→2025: da 144 a 189</div>
+      <div class="delta up">▲ espansione costante</div>
+    </div>
+  </div>
+
+  <!-- ═══ SEZIONE 2: TREND TRIENNALE ═══ -->
+  <div class="sec-hdr">
+    <span class="ico">📈</span>
+    <h2>Trend Triennale Costi — Dicembre 2023 · 2024 · 2025</h2>
+    <span class="badge b-green">Andamento annuo</span>
+  </div>
+
+  <div class="chart-grid-2">
+    <!-- Costo totale + lavoratori -->
+    <div class="chart-box">
+      <div class="ch-title">💶 Costo Totale (€) &amp; Lavoratori per Anno</div>
+      <div class="chart-wrap h220"><canvas id="chartTrend"></canvas></div>
+    </div>
+    <!-- Costo orario trend -->
+    <div class="chart-box">
+      <div class="ch-title">⚡ Costo Orario Medio (€/h) — Efficienza</div>
+      <div class="chart-wrap h220"><canvas id="chartOrario"></canvas></div>
+    </div>
+  </div>
+
+  <div class="chart-grid-3">
+    <!-- Ore lavorate -->
+    <div class="chart-box">
+      <div class="ch-title">🕐 Ore Lavorate Totali</div>
+      <div class="chart-wrap h200"><canvas id="chartOre"></canvas></div>
+    </div>
+    <!-- Costo per lavoratore -->
+    <div class="chart-box">
+      <div class="ch-title">👤 Costo Medio per Lavoratore (€)</div>
+      <div class="chart-wrap h200"><canvas id="chartPerLav"></canvas></div>
+    </div>
+    <!-- Variazioni percentuali -->
+    <div class="chart-box">
+      <div class="ch-title">📊 Variazioni % Anno su Anno</div>
+      <div class="chart-wrap h200"><canvas id="chartVariaz"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ═══ SEZIONE 3: NOTA CONTABILE — VOCE CONTABILE ═══ -->
+  <div class="sec-hdr">
+    <span class="ico">🧾</span>
+    <h2>Nota Contabile — Dettaglio per Voce (Gruppo 72)</h2>
+    <span class="badge b-amber">Campione: Gennaio 2024 · 8 lavoratori</span>
+  </div>
+
+  <div class="data-note" style="background:var(--cyan-bg); border-color:#a5f3fc;">
+    <span class="dn-ico">ℹ️</span>
+    <div>
+      <strong style="color:var(--cyan)">Nota Contabile — campione illustrativo:</strong> Il grafico mostra la composizione percentuale
+      per voce contabile (Gruppo 72 — Costo del Lavoro) su 8 lavoratori di gennaio 2024. Le proporzioni (stipendi 65%, INPS 23,5%, TFR 6,7%)
+      sono strutturali e si replicano sull'intero dataset. Per analisi per CdC, anno, mese — i <strong>241.632 record completi</strong>
+      sono interrogabili via <code>zoho.fetch("Nota Contabile", criteria='"Anno"=\'2025\'')</code>.
+    </div>
+  </div>
+
+  <div style="display:grid; grid-template-columns:1.4fr 1fr; gap:16px; margin-bottom:20px;">
+    <div class="nc-table-wrap">
+      <table class="nc-table">
+        <thead>
+          <tr>
+            <th>Voce Contabile</th>
+            <th>Importo (€)</th>
+            <th style="min-width:140px">% sul totale</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>💼 Salari e Stipendi</td>
+            <td class="costo-val">12.093</td>
+            <td>
+              <div class="pct-bar">
+                <div class="bar-bg"><div class="bar-fill" style="width:65.3%;background:var(--accent)"></div></div>
+                <span class="pct-val">65.3%</span>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td>🏛️ Oneri Sociali INPS</td>
+            <td class="costo-val">4.356</td>
+            <td>
+              <div class="pct-bar">
+                <div class="bar-bg"><div class="bar-fill" style="width:23.5%;background:var(--violet)"></div></div>
+                <span class="pct-val">23.5%</span>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td>📦 Quota TFR Accantonamento</td>
+            <td class="costo-val">1.247</td>
+            <td>
+              <div class="pct-bar">
+                <div class="bar-bg"><div class="bar-fill" style="width:6.7%;background:var(--amber)"></div></div>
+                <span class="pct-val">6.7%</span>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td>🚗 Rimborsi (forfett. + km)</td>
+            <td class="costo-val">695</td>
+            <td>
+              <div class="pct-bar">
+                <div class="bar-bg"><div class="bar-fill" style="width:3.8%;background:var(--emerald)"></div></div>
+                <span class="pct-val">3.8%</span>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td>🛡️ Oneri Sociali INAIL</td>
+            <td class="costo-val">126</td>
+            <td>
+              <div class="pct-bar">
+                <div class="bar-bg"><div class="bar-fill" style="width:0.7%;background:var(--cyan)"></div></div>
+                <span class="pct-val">0.7%</span>
+              </div>
+            </td>
+          </tr>
+          <tr class="total-row">
+            <td>📋 TOTALE CAMPIONE (8 lavoratori)</td>
+            <td class="costo-val">18.517</td>
+            <td><span class="trend-pill trend-neu">100.0%</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Donut NC -->
+    <div class="chart-box" style="display:flex;flex-direction:column;justify-content:center;">
+      <div class="ch-title">🥧 Composizione Costo del Lavoro</div>
+      <div class="chart-wrap"><canvas id="chartNC"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Stima su organico completo -->
+  <div class="stat-row">
+    <div class="stat-chip">
+      <span class="sc-lbl">Costo Medio / Lavoratore (gen-24, campione)</span>
+      <span class="sc-val">€ 2.315</span>
+      <span class="sc-sub">18.517 ÷ 8 lavoratori</span>
+    </div>
+    <div class="stat-chip">
+      <span class="sc-lbl">Di cui Stipendio (% stimata)</span>
+      <span class="sc-val">65.3%</span>
+      <span class="sc-sub">~ € 1.512 / lavoratore</span>
+    </div>
+    <div class="stat-chip">
+      <span class="sc-lbl">Di cui Oneri (INPS+INAIL)</span>
+      <span class="sc-val">24.2%</span>
+      <span class="sc-sub">~ € 560 / lavoratore</span>
+    </div>
+    <div class="stat-chip">
+      <span class="sc-lbl">Stima annualizzata (189 lav.)</span>
+      <span class="sc-val">~ € 5.25M</span>
+      <span class="sc-sub">2.315 × 189 × 12 mesi</span>
+    </div>
+  </div>
+
+  <!-- ═══ SEZIONE 4: STRUTTURA DATI E JOIN CHAIN ═══ -->
+  <div class="sec-hdr">
+    <span class="ico">🔗</span>
+    <h2>Architettura Dati — Join Chain Giustificativi</h2>
+    <span class="badge b-violet">Schema tecnico</span>
+  </div>
+
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;">
+
+    <!-- Join chain principale -->
+    <div class="join-chain">
+      <div class="chain-title">🔗 Chain 1 — Costo Personale → Lavoratore → CdC</div>
+      <div class="chain-steps">
+        <span class="chain-step">Costo Personale</span>
+        <span class="chain-arrow">→</span>
+        <span class="chain-step">Storico Rapporto.ID</span>
+        <span class="chain-arrow">→</span>
+        <span class="chain-step">SR.Rapporto</span>
+        <span class="chain-arrow">→</span>
+        <span class="chain-step">Rapporti.ID</span>
+        <span class="chain-arrow">→</span>
+        <span class="chain-step green">Rapporti.Matricola</span>
+        <span class="chain-arrow">→</span>
+        <span class="chain-step amber">Nota Contabile.Matricola</span>
+      </div>
+      <div class="chain-note">
+        La <strong>Matricola</strong> è il campo chiave che collega il lavoratore alla sua registrazione in Nota Contabile (Zoho Books).
+        Il CdC si ricava da <code>SR.Centro di Costo</code> (FK lookup diretto sullo Storico Rapporto).
+      </div>
+    </div>
+
+    <!-- Join chain giustificativi -->
+    <div class="join-chain">
+      <div class="chain-title">🔗 Chain 2 — Giustificativi → Lavoratore → NC</div>
+      <div class="chain-steps">
+        <span class="chain-step">Presenze Giornaliere</span>
+        <span class="chain-arrow">→</span>
+        <span class="chain-step">GP.Rapporto (FK)</span>
+        <span class="chain-arrow">→</span>
+        <span class="chain-step">Storico Rapporto.ID</span>
+        <span class="chain-arrow">→</span>
+        <span class="chain-step">SR.Centro di Costo</span>
+        <span class="chain-arrow">+</span>
+        <span class="chain-step green">SR.Rapporto → Matricola</span>
+        <span class="chain-arrow">→</span>
+        <span class="chain-step amber">Nota Contabile</span>
+      </div>
+      <div class="chain-note">
+        La colonna <code>Giustificativi</code> in Presenze Giornaliere (Zoho Analytics) è <strong>sempre vuota</strong>.
+        Il dato reale è nella tabella separata <strong>Giustificativi Personale (Zoho Creator)</strong> con campi:
+        <code>Ore</code> (decimale), <code>Tipo</code> (FK → Tipo Presenza: FE, MA, MT, PF, RO, ROA…).
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabella Tipo Presenza -->
+  <div class="sec-hdr">
+    <span class="ico">📋</span>
+    <h2>Tipi Presenza — Tabella Lookup Giustificativi</h2>
+    <span class="badge b-cyan">Zoho Creator · Tipo Presenza</span>
+  </div>
+
+  <div class="nc-table-wrap">
+    <table class="nc-table">
+      <thead>
+        <tr>
+          <th>Codice</th>
+          <th>Descrizione</th>
+          <th>Retribuito</th>
+          <th>Note</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>FE</strong></td><td>Ferie</td><td><span class="trend-pill trend-up">✓ Sì</span></td><td>Programmabile, richiede autorizzazione</td></tr>
+        <tr><td><strong>MA</strong></td><td>Malattia</td><td><span class="trend-pill trend-up">✓ Sì</span></td><td>Gestita da INPS; impatta costo indiretto</td></tr>
+        <tr><td><strong>MT</strong></td><td>Maternità</td><td><span class="trend-pill trend-up">✓ Sì</span></td><td>≠ assenteismo; non va in KPI assenze</td></tr>
+        <tr><td><strong>PF</strong></td><td>Permesso ex Festività</td><td><span class="trend-pill trend-up">✓ Sì</span></td><td>Festività soppresse, fruibili come permesso</td></tr>
+        <tr><td><strong>RO</strong></td><td>Riposo Ordinario</td><td><span class="trend-pill trend-up">✓ Sì</span></td><td>Riposo settimanale contrattuale</td></tr>
+        <tr><td><strong>ROA</strong></td><td>Riposo Ordinario Aggiuntivo</td><td><span class="trend-pill trend-up">✓ Sì</span></td><td>Riposo aggiuntivo CCNL</td></tr>
+        <tr><td><strong>MZ</strong></td><td>Malattia in Prova</td><td><span class="trend-pill trend-down">✗ No</span></td><td>Periodo di prova; non coperto da INPS</td></tr>
+        <tr><td><strong>PN</strong></td><td>Permesso Non Retribuito</td><td><span class="trend-pill trend-down">✗ No</span></td><td>Richiede autorizzazione esplicita</td></tr>
+        <tr><td><strong>AP</strong></td><td>Aspettativa Non Retribuita</td><td><span class="trend-pill trend-down">✗ No</span></td><td>Lunghezza definita da accordo individuale</td></tr>
+        <tr><td><strong>SCIOPERO</strong></td><td>Sciopero</td><td><span class="trend-pill trend-down">✗ No</span></td><td>Decurtazione automatica quota giornaliera</td></tr>
+        <tr><td><strong>SD</strong></td><td>Sospensione Disciplinare</td><td><span class="trend-pill trend-down">✗ No</span></td><td>Provvedimento disciplinare scritto</td></tr>
+        <tr><td><strong>AI</strong></td><td>Assenza Ingiustificata</td><td><span class="trend-pill trend-down">✗ No</span></td><td>Entry più recente (ID: 157771000015521377)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══ NOTE TECNICHE ═══ -->
+  <div class="sec-hdr">
+    <span class="ico">⚙️</span>
+    <h2>Note Tecniche — Limitazioni &amp; Prossimi Passi</h2>
+    <span class="badge b-amber">TODO</span>
+  </div>
+
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:30px;">
+    <div class="chart-box">
+      <div class="ch-title">🔴 Limitazioni Correnti</div>
+      <ul style="font-size:13px; color:var(--text2); line-height:1.9; margin:0; padding-left:16px;">
+        <li><strong>WHERE clause ignorata</strong> in Zoho Analytics SQL → filtro eseguito in Python post-fetch</li>
+        <li><strong>Costo Personale</strong>: solo dati dicembre (anno intero cumulato, non mensile)</li>
+        <li><strong>Nota Contabile</strong>: limitata a 200 righe/query → solo gen-2024, 8 lavoratori</li>
+        <li><strong>Giustificativi</strong> in Analytics sempre vuoti → la vera tabella è in Zoho Creator (API separata)</li>
+        <li><strong>GROUP BY</strong> non aggrega in Zoho Analytics → aggregazione manuale Python</li>
+      </ul>
+    </div>
+    <div class="chart-box">
+      <div class="ch-title">✅ Prossimi Passi Consigliati</div>
+      <ul style="font-size:13px; color:var(--text2); line-height:1.9; margin:0; padding-left:16px;">
+        <li>Abilitare paginazione completa NC (OFFSET iterativo) per coprire tutti gli anni</li>
+        <li>Connettere <strong>Zoho Creator API</strong> per Giustificativi Personale (Ore + Tipo reali)</li>
+        <li>Aggiornare <code>hr_data_final.py</code> con join reale GP → SR → Matricola → NC</li>
+        <li>Creare report mensile automatico da <strong>Costo Personale × Mese</strong> (attualmente solo dic)</li>
+        <li>Dashboard <strong>13_giustificativi.html</strong>: assenze per tipo, CdC, trend mensile</li>
+      </ul>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ── Date ─────────────────────────────────────────────────────────
+document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'});
+
+// ── Dataset ──────────────────────────────────────────────────────
+const anni = ['2023','2024','2025'];
+const costiTotali   = [361744, 468445, 504563];
+const lavoratori    = [144, 170, 189];
+const oreLavorate   = [15934, 20410, 22232];
+const costoOrario   = [22.70, 22.95, 22.70];
+const costoPerLav   = costiTotali.map((c,i) => Math.round(c/lavoratori[i]));
+
+const COLORS = {
+  blue:   '#2563eb',
+  green:  '#059669',
+  amber:  '#d97706',
+  violet: '#7c3aed',
+  cyan:   '#0891b2',
+  pink:   '#db2777',
+  blueLite:  'rgba(37,99,235,.15)',
+  greenLite: 'rgba(5,150,105,.15)',
+  amberLite: 'rgba(217,119,6,.15)',
+};
+
+Chart.defaults.font.family = "'Inter','Segoe UI',sans-serif";
+Chart.defaults.color = '#94a3b8';
+
+// ── Shared grid opts ──────────────────────────────────────────────
+function gridOpts() {
+  return {
+    grid:{ color:'rgba(148,163,184,.15)', drawBorder:false },
+    ticks:{ font:{size:11} },
+    border:{ display:false }
+  };
+}
+
+// ── Chart 1: Costo Totale + Lavoratori (dual axis) ─────────────
+const ctxTrend = document.getElementById('chartTrend').getContext('2d');
+new Chart(ctxTrend, {
+  type: 'bar',
+  data: {
+    labels: anni,
+    datasets: [
+      {
+        label: 'Costo Totale (€)',
+        data: costiTotali,
+        backgroundColor: [COLORS.blueLite, COLORS.blueLite, COLORS.blue],
+        borderColor: [COLORS.blue, COLORS.blue, COLORS.blue],
+        borderWidth: 2, borderRadius: 6,
+        yAxisID: 'y',
+      },
+      {
+        label: 'Lavoratori',
+        data: lavoratori,
+        type: 'line',
+        borderColor: COLORS.green, backgroundColor: 'transparent',
+        borderWidth: 2.5, pointBackgroundColor: COLORS.green, pointRadius: 5,
+        tension: 0.3, yAxisID: 'y2',
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend:{ labels:{ boxWidth:12, font:{size:11} } },
+      tooltip:{
+        callbacks:{
+          label:(ctx) => ctx.datasetIndex === 0
+            ? ` € ${ctx.raw.toLocaleString('it-IT')}`
+            : ` ${ctx.raw} lavoratori`
+        }
+      }
+    },
+    scales: {
+      x:{ ...gridOpts() },
+      y:{ ...gridOpts(), position:'left', ticks:{ callback: v => '€ '+Math.round(v/1000)+'K' } },
+      y2:{ ...gridOpts(), position:'right', grid:{ display:false }, ticks:{ callback: v => v+' 👤' } }
+    }
+  }
+});
+
+// ── Chart 2: Costo Orario ─────────────────────────────────────────
+const ctxOrario = document.getElementById('chartOrario').getContext('2d');
+new Chart(ctxOrario, {
+  type: 'line',
+  data: {
+    labels: anni,
+    datasets: [{
+      label: '€/h medio',
+      data: costoOrario,
+      borderColor: COLORS.violet, backgroundColor: COLORS.amberLite,
+      borderWidth: 3, pointBackgroundColor: COLORS.violet, pointRadius: 6,
+      fill: true, tension: 0.4,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins:{
+      legend:{ display:false },
+      tooltip:{ callbacks:{ label: ctx => ` € ${ctx.raw.toFixed(2)}/h` } }
+    },
+    scales: {
+      x:{ ...gridOpts() },
+      y:{ ...gridOpts(), min:22, max:23.5, ticks:{ callback: v => '€ '+v.toFixed(2) } }
+    }
+  }
+});
+
+// ── Chart 3: Ore Lavorate ─────────────────────────────────────────
+const ctxOre = document.getElementById('chartOre').getContext('2d');
+new Chart(ctxOre, {
+  type: 'bar',
+  data: {
+    labels: anni,
+    datasets: [{
+      label: 'Ore',
+      data: oreLavorate,
+      backgroundColor: [COLORS.blueLite, COLORS.blueLite, COLORS.cyan],
+      borderColor: COLORS.cyan, borderWidth: 2, borderRadius: 6
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins:{ legend:{display:false} },
+    scales:{
+      x:{ ...gridOpts() },
+      y:{ ...gridOpts(), ticks:{ callback: v => v.toLocaleString('it-IT') } }
+    }
+  }
+});
+
+// ── Chart 4: Costo per Lavoratore ─────────────────────────────────
+const ctxPerLav = document.getElementById('chartPerLav').getContext('2d');
+new Chart(ctxPerLav, {
+  type: 'bar',
+  data: {
+    labels: anni,
+    datasets: [{
+      label: '€/lavoratore',
+      data: costoPerLav,
+      backgroundColor: [COLORS.amberLite, COLORS.amberLite, COLORS.amber],
+      borderColor: COLORS.amber, borderWidth: 2, borderRadius: 6
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: ctx => ` € ${ctx.raw.toLocaleString('it-IT')}` } } },
+    scales:{
+      x:{ ...gridOpts() },
+      y:{ ...gridOpts(), ticks:{ callback: v => '€ '+Math.round(v/100)*100 } }
+    }
+  }
+});
+
+// ── Chart 5: Variazioni % YoY ─────────────────────────────────────
+const ctxVariaz = document.getElementById('chartVariaz').getContext('2d');
+function pct(arr,i){ return i===0 ? 0 : +((arr[i]-arr[i-1])/arr[i-1]*100).toFixed(1); }
+const varCosti = anni.slice(1).map((_,i) => pct(costiTotali,i+1));
+const varLav   = anni.slice(1).map((_,i) => pct(lavoratori,i+1));
+const varOre   = anni.slice(1).map((_,i) => pct(oreLavorate,i+1));
+new Chart(ctxVariaz, {
+  type: 'bar',
+  data: {
+    labels: ['2023→2024','2024→2025'],
+    datasets: [
+      { label:'Costi', data:varCosti, backgroundColor:COLORS.blue, borderRadius:5 },
+      { label:'Lavoratori', data:varLav, backgroundColor:COLORS.green, borderRadius:5 },
+      { label:'Ore', data:varOre, backgroundColor:COLORS.amber, borderRadius:5 },
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins:{ legend:{ labels:{ boxWidth:10, font:{size:10} } }, tooltip:{ callbacks:{ label: ctx => ` ${ctx.dataset.label}: +${ctx.raw}%` } } },
+    scales:{
+      x:{ ...gridOpts() },
+      y:{ ...gridOpts(), ticks:{ callback: v => v+'%' } }
+    }
+  }
+});
+
+// ── Chart 6: Donut NC ─────────────────────────────────────────────
+const ctxNC = document.getElementById('chartNC').getContext('2d');
+new Chart(ctxNC, {
+  type: 'doughnut',
+  data: {
+    labels: ['Stipendi','INPS','TFR','Rimborsi','INAIL'],
+    datasets: [{
+      data: [12093, 4356, 1247, 695, 126],
+      backgroundColor: [COLORS.blue, COLORS.violet, COLORS.amber, COLORS.green, COLORS.cyan],
+      borderWidth: 2, borderColor: '#ffffff',
+      hoverOffset: 6
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false, cutout:'65%',
+    plugins:{
+      legend:{ position:'bottom', labels:{ boxWidth:10, font:{size:11}, padding:10 } },
+      tooltip:{ callbacks:{ label: ctx => ` € ${ctx.raw.toLocaleString('it-IT')} (${((ctx.raw/18517)*100).toFixed(1)}%)` } }
+    }
+  }
+});
+</script>
+<script src="shared/nav.js?v=20260525-1800"></script>
+</div><!-- /.main -->
+</body>
+</html>

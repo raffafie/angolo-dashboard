@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="athena-static-only" content="true"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Status Ospiti — Dashboard Analytics</title>
+<link rel="stylesheet" href="shared/style.css?v=20260525-1800">
+<style>
+.stato-badge {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600;
+}
+.stato-row {
+  display:grid; grid-template-columns:180px repeat(9,1fr);
+  gap:4px; padding:8px 12px; border-bottom:1px solid var(--border);
+  font-size:12px; align-items:center;
+}
+.stato-row.header { color:var(--text2); font-weight:600; font-size:10px;
+  text-transform:uppercase; background:rgba(59,130,246,.04); }
+.stato-row:last-child { border-bottom:none; }
+.stato-num { text-align:right; font-variant-numeric:tabular-nums; }
+.mini-bar {
+  height:6px; border-radius:3px; background:var(--surface2);
+  margin-top:2px; overflow:hidden;
+}
+.mini-bar-fill { height:100%; border-radius:3px; transition:width .4s; }
+.tempo-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius); padding:14px 16px; position:relative;
+}
+.tempo-card:hover { border-color:var(--border2); }
+.tempo-val { font-size:28px; font-weight:800; color:var(--accent2); }
+.tempo-range { font-size:11px; color:var(--text3); margin-top:2px; }
+.tempo-note { font-size:11px; color:var(--text2); margin-top:6px; line-height:1.4; }
+.tempo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; margin-bottom:24px; }
+</style>
+</head>
+<body data-page="ospiti">
+<div id="topbar" class="topbar"></div>
+<div id="data-mode-bar" class="data-bar static mb-16"><span class="dot"></span>Caricamento dati...</div>
+
+<div class="main">
+
+  <div class="page-header">
+    <h1><span class="icon">⚖️</span> Status Ospiti &amp; Giuridico</h1>
+    <p>Distribuzione stati giuridici, movimenti, revoche, allontanamenti e tempi medi — Dati Zoho Creator / Anagrafica Ospiti</p>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="filters">
+    <label>Anno:</label>
+    <select id="f-anno" onchange="renderAll()">
+      <option value="2025" selected>2025</option>
+      <option value="2026">2026 (n.d.)</option>
+    </select>
+    <label>Centro:</label>
+    <select id="f-cdc" onchange="renderAll()">
+      <option value="all">Tutti i centri</option>
+      <option value="PISA">CAS PISA</option>
+      <option value="RIETI">CAD RIETI</option>
+      <option value="DROSSO">DROSSO</option>
+      <option value="LORANZE">LORANZÈ</option>
+      <option value="VICENZA">VICENZA</option>
+      <option value="MODENA">MODENA IMMIGRAZIONE</option>
+      <option value="VICO">VICO-VALCHIUSA</option>
+      <option value="CAMBO">CAMPOBASSO</option>
+    </select>
+    <button class="btn-apply" onclick="renderAll()">↻ Aggiorna</button>
+  </div>
+
+  <!-- KPI -->
+  <div class="kpi-grid" id="kpi-ospiti"></div>
+
+  <!-- 🚪 MOVIMENTI OSPITI 2025 — ingressi, uscite, allontanamenti, revoche -->
+  <div class="chart-card" style="margin-bottom:16px;">
+    <div class="chart-title" style="margin-bottom:10px;">
+      <span class="dot" style="background:#f59e0b"></span>
+      Movimenti ospiti per mese (Totale Cooperativa 2025)
+      <span style="margin-left:auto;font-size:10px;color:var(--text3);">Fonte: <code>DA.OSPITI_MOVIMENTI_M</code> · Storico Soggiorno (Zoho Creator)</span>
+    </div>
+    <div id="movimenti-kpi" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;"></div>
+    <div class="chart-wrap" style="height:260px"><canvas id="c-movimenti-trend"></canvas></div>
+  </div>
+
+  <!-- 👨‍👩‍👧 NUCLEI FAMILIARI — fonte Zoho Creator -->
+  <div class="chart-card" style="margin-bottom:16px;">
+    <div class="chart-title" style="margin-bottom:10px;">
+      <span class="dot" style="background:#ec4899"></span>
+      Nuclei familiari — anagrafica Zoho Creator
+      <span style="margin-left:auto;font-size:10px;color:var(--text3);">Fonte: <code>gestione-accoglienza.Nuclei_Familiari_Portal</code></span>
+    </div>
+    <div id="nuclei-stats" style="font-size:11px;color:var(--text2);">⏳ caricamento…</div>
+  </div>
+
+  <!-- Charts distribuzione -->
+  <div class="chart-grid cols-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#3b82f6"></span>Distribuzione stati giuridici (totale ospiti)</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-stati-donut"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#10b981"></span>Ospiti per stato per CdC</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-stati-cdc"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Movimenti mensili -->
+  <div class="chart-grid cols-full">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#8b5cf6"></span>Movimenti mensili 2025 — Ingressi, Uscite, Allontanamenti, Revoche</div>
+      <div class="chart-wrap" style="height:240px"><canvas id="c-movimenti"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Revocati / Allontanati trend -->
+  <div class="chart-grid cols-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#ef4444"></span>Allontanamenti e revoche per CdC</div>
+      <div class="chart-wrap" style="height:240px"><canvas id="c-critici"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#f97316"></span>Esiti procedura (% su ospiti usciti)</div>
+      <div class="chart-wrap" style="height:240px"><canvas id="c-esiti"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Tempi medi -->
+  <div class="section-title">⏱️ Tempi Medi di Risoluzione Procedure</div>
+  <div class="tempo-grid" id="tempo-cards"></div>
+
+  <!-- Tabella dettaglio per CdC -->
+  <div class="section-title">📋 Dettaglio Stati Giuridici per Centro</div>
+  <div class="chart-card" style="overflow-x:auto">
+    <div class="stato-row header">
+      <div>Centro</div>
+      <div class="stato-num">Rich.</div>
+      <div class="stato-num">P.Suss.</div>
+      <div class="stato-num">P.Spec.</div>
+      <div class="stato-num">P.Uman.</div>
+      <div class="stato-num">Dinieg.</div>
+      <div class="stato-num">Ricorr.</div>
+      <div class="stato-num" style="color:#ef4444">Revocati</div>
+      <div class="stato-num" style="color:#dc2626">Allont.</div>
+      <div class="stato-num">Trasfr.</div>
+    </div>
+    <div id="stato-rows"></div>
+  </div>
+
+  <div class="alert alert-info" style="margin-top:16px">
+    ℹ️ I dati sugli stati giuridici provengono da <strong>Zoho Creator — Storico Giuridico</strong> e <strong>Anagrafica Ospiti</strong>. I valori di "Revocati" e "Allontanati" sono cumulativi 2025. Le protezioni riconosciute includono Sussidiaria, Speciale e Umanitaria.
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<script src="shared/data.js?v=20260525-1800"></script>
+<script src="shared/filters.js?v=20260525-1800"></script>
+<script src="shared/live.js?v=20260525-1800"></script>
+<script src="shared/nav.js?v=20260525-1800"></script>
+<script>
+const ALL_KEYS = ['PISA','DROSSO','LORANZE','VICENZA','RIETI','MODENA','VICO','CAMBO'];
+
+function getKeys(){
+  const v = document.getElementById('f-cdc')?.value || 'all';
+  return v === 'all' ? ALL_KEYS : [v];
+}
+function getAnno(){ return parseInt(document.getElementById('f-anno')?.value||2025); }
+
+function totStatus(key, keys){
+  return keys.reduce((s,k)=>(s+(DA.STATUS_OSPITI[k]?.[key]||0)),0);
+}
+
+function renderKpi(){
+  const keys = getKeys();
+  // Chiavi reali Zoho: in_iter, ricorrente, titolare, diniegato
+  const totInIter  = totStatus('in_iter', keys);
+  const totTitolare= totStatus('titolare', keys);
+  const totDin     = totStatus('diniegato', keys);
+  const totRic     = totStatus('ricorrente', keys);
+  const totOspiti  = DA.STATUS_KEYS.reduce((s,k)=>s+totStatus(k,keys),0);
+  // revocati/allontanati non disponibili in Storico Giuridico Zoho
+
+  const kpis = [
+    {icon:'👥', val:totOspiti,  label:'Ospiti totali (Storico Giuridico)', col:'kpi-blue'},
+    {icon:'⏳', val:totInIter,  label:'In iter procedurale',               col:'kpi-violet'},
+    {icon:'✅', val:totTitolare,label:'Titolari protezione',               col:'kpi-green'},
+    {icon:'🔄', val:totRic,     label:'Ricorrenti (dopo diniego)',         col:'kpi-amber'},
+    {icon:'⚠️', val:totDin,    label:'Diniegati',                         col:'kpi-red'},
+    {icon:'ℹ️', val:'N/D',     label:'Revocati/Allontanati (non in Zoho)',col:'kpi-gray'},
+  ];
+  document.getElementById('kpi-ospiti').innerHTML = kpis.map(k=>`
+    <div class="kpi-card ${k.col}">
+      <div class="kpi-icon">${k.icon}</div>
+      <div class="kpi-val sm">${k.val}</div>
+      <div class="kpi-label">${k.label}</div>
+    </div>`).join('');
+}
+
+function renderStatiDonut(){
+  const keys = getKeys();
+  const vals = DA.STATUS_KEYS.map(k=>totStatus(k,keys));
+  DA.mkChart('c-stati-donut',{type:'doughnut',
+    data:{labels:DA.STATUS_LABELS,
+      datasets:[{data:vals,backgroundColor:DA.STATUS_COLORS,borderColor:'#0d1526',borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'50%',
+      plugins:{legend:{position:'right',labels:{font:{size:11}}}}}
+  });
+}
+
+function renderStatiCdc(){
+  const keys = getKeys();
+  DA.mkChart('c-stati-cdc',{type:'bar',
+    data:{labels:keys.map(k=>DA.CDC[k]?.label||k),
+      datasets:[
+        {label:'In Iter',       data:keys.map(k=>DA.STATUS_OSPITI[k]?.in_iter||0),    backgroundColor:'#3b82f6cc',borderRadius:2},
+        {label:'Titolari',      data:keys.map(k=>DA.STATUS_OSPITI[k]?.titolare||0),   backgroundColor:'#10b981cc',borderRadius:2},
+        {label:'Ricorrenti',    data:keys.map(k=>DA.STATUS_OSPITI[k]?.ricorrente||0), backgroundColor:'#f59e0bcc',borderRadius:2},
+        {label:'Diniegati',     data:keys.map(k=>DA.STATUS_OSPITI[k]?.diniegato||0),  backgroundColor:'#ef4444cc',borderRadius:2},
+      ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      // REFACTOR UX (mag 2026): rimosso stacked. Stati giuridici (In Iter / Titolari /
+      // Ricorrenti / Diniegati) sono mutualmente esclusivi — grouped è più chiaro.
+      scales:{y:{beginAtZero:true}},
+      plugins:{legend:{position:'top',labels:{font:{size:10}}}}}
+  });
+}
+
+function renderMovimenti(){
+  DA.mkChart('c-movimenti',{type:'line',
+    data:{labels:DA.MESI_LABEL,
+      datasets:[
+        {label:'Ingressi',     data:DA.OSPITI_MOVIMENTI_M.ingressi, borderColor:'#10b981',backgroundColor:'#10b98122',fill:true,tension:0.3,borderWidth:2},
+        {label:'Uscite',       data:DA.OSPITI_MOVIMENTI_M.uscite,   borderColor:'#3b82f6',backgroundColor:'#3b82f622',fill:true,tension:0.3,borderWidth:2},
+        {label:'Allontanati',  data:DA.OSPITI_MOVIMENTI_M.allont,   borderColor:'#ef4444',backgroundColor:'transparent',tension:0.3,borderWidth:2,borderDash:[4,3]},
+        {label:'Revocati',     data:DA.OSPITI_MOVIMENTI_M.revoche,  borderColor:'#f97316',backgroundColor:'transparent',tension:0.3,borderWidth:2,borderDash:[4,3]},
+      ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top'}},
+      scales:{y:{title:{display:true,text:'N. ospiti',color:'#546a87'},min:0}}}
+  });
+}
+
+function renderCritici(){
+  const keys = getKeys();
+  // Diniegati + Ricorrenti come proxy delle situazioni critiche (revocati/allontanati non in Zoho)
+  DA.mkChart('c-critici',{type:'bar',
+    data:{labels:keys.map(k=>DA.CDC[k]?.label||k),
+      datasets:[
+        {label:'Diniegati',  data:keys.map(k=>DA.STATUS_OSPITI[k]?.diniegato||0),  backgroundColor:'#f59e0bcc',borderColor:'#f59e0b',borderWidth:1,borderRadius:4},
+        {label:'Ricorrenti', data:keys.map(k=>DA.STATUS_OSPITI[k]?.ricorrente||0), backgroundColor:'#ef4444cc',borderColor:'#ef4444',borderWidth:1,borderRadius:4},
+      ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top'},
+        subtitle:{display:true,text:'Revocati/Allontanati non disponibili in Zoho Analytics',color:'#546a87',font:{size:10}}},
+      scales:{y:{title:{display:true,text:'Ospiti',color:'#546a87'}}}}
+  });
+}
+
+function renderEsiti(){
+  const keys = getKeys();
+  // Solo dati reali Zoho: 4 categorie da Storico Giuridico
+  const totInIter  = keys.reduce((s,k)=>(s+(DA.STATUS_OSPITI[k]?.in_iter||0)),0);
+  const totTitolare= keys.reduce((s,k)=>(s+(DA.STATUS_OSPITI[k]?.titolare||0)),0);
+  const totDin     = keys.reduce((s,k)=>(s+(DA.STATUS_OSPITI[k]?.diniegato||0)),0);
+  const totRic     = keys.reduce((s,k)=>(s+(DA.STATUS_OSPITI[k]?.ricorrente||0)),0);
+  DA.mkChart('c-esiti',{type:'doughnut',
+    data:{labels:['In Iter Procedurale','Titolare Protezione','Ricorrente','Diniegato'],
+      datasets:[{
+        data:[totInIter,totTitolare,totRic,totDin],
+        backgroundColor:['#3b82f6cc','#10b981cc','#f59e0bcc','#ef4444cc'],
+        borderColor:'#0d1526',borderWidth:2
+      }]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'55%',
+      plugins:{legend:{position:'right',labels:{font:{size:11}}},
+        subtitle:{display:true,text:'Fonte: Storico Giuridico Zoho — dati cumulativi',color:'#546a87',font:{size:10}}}}
+  });
+}
+
+function renderTempi(){
+  document.getElementById('tempo-cards').innerHTML = DA.TEMPI_STATI.map(t=>`
+    <div class="tempo-card">
+      <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;margin-bottom:6px">${t.stato}</div>
+      <div class="tempo-val">${t.giorni_med} <span style="font-size:14px;color:var(--text3)">gg</span></div>
+      <div class="tempo-range">Min ${t.min}gg — Max ${t.max}gg</div>
+      <div class="tempo-note">${t.note}</div>
+    </div>`).join('');
+}
+
+function renderStatoRows(){
+  const keys = getKeys();
+  document.getElementById('stato-rows').innerHTML = keys.map(k=>{
+    const d = DA.STATUS_OSPITI[k]||{};
+    const cdc = DA.CDC[k];
+    const tot = DA.STATUS_KEYS.reduce((s,sk)=>s+(d[sk]||0),0);
+    return `<div class="stato-row">
+      <div><span class="cdc-pill ${cdc?.pill||''}">${cdc?.label||k}</span></div>
+      ${DA.STATUS_KEYS.map((sk,i)=>`
+        <div class="stato-num">
+          <div>${d[sk]||0}</div>
+          <div class="mini-bar"><div class="mini-bar-fill" style="width:${tot>0?((d[sk]||0)/tot*100).toFixed(0):0}%;background:${DA.STATUS_COLORS[i]}"></div></div>
+        </div>`).join('')}
+    </div>`;
+  }).join('');
+}
+
+function renderAll(){
+  DA.chartDefaults(Chart);
+  renderKpi();
+  renderStatiDonut(); renderStatiCdc(); renderMovimenti();
+  renderCritici(); renderEsiti();
+  renderTempi(); renderStatoRows();
+  renderMovimentiBreakdown();
+  loadNucleiFamiliari();
+}
+
+// ─── 🚪 MOVIMENTI MENSILI 2025 (totale Cooperativa) ──────────────────────
+let _chMovTrend;
+function renderMovimentiBreakdown() {
+  const mv = window.DA?.OSPITI_MOVIMENTI_M;
+  if (!mv) return;
+  const kpiBox = document.getElementById('movimenti-kpi');
+  const totIng = mv.ingressi.reduce((a,b)=>a+b,0);
+  const totUsc = mv.uscite.reduce((a,b)=>a+b,0);
+  const totAll = mv.allont.reduce((a,b)=>a+b,0);
+  const totRev = mv.revoche.reduce((a,b)=>a+b,0);
+  const items = [
+    { ico:'🟢', val: totIng, lbl:'NUOVI INGRESSI', sub:'2025', color:'#10b981' },
+    { ico:'🔵', val: totUsc, lbl:'USCITE TOTALI', sub:'2025', color:'#3b82f6' },
+    { ico:'🟠', val: totAll, lbl:'ALLONTANAMENTI', sub:'volontari', color:'#f59e0b' },
+    { ico:'🔴', val: totRev, lbl:'REVOCHE', sub:'provvedimenti', color:'#ef4444' },
+    { ico:'⚖️', val: totIng - totUsc - totAll - totRev, lbl:'SALDO NETTO', sub:'ingr − (uscite+allont+revoche)', color:'#8b5cf6' },
+  ];
+  if (kpiBox) kpiBox.innerHTML = items.map(k=>`
+    <div style="background:rgba(15,23,42,.5);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:10px 12px;border-left:3px solid ${k.color};">
+      <div style="font-size:16px;">${k.ico}</div>
+      <div style="font-size:20px;font-weight:800;color:var(--text1);line-height:1.2;margin-top:2px;">${k.val}</div>
+      <div style="font-size:9.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;">${k.lbl}</div>
+      <div style="font-size:10px;color:var(--text2);margin-top:3px;">${k.sub}</div>
+    </div>
+  `).join('');
+
+  // Chart trend mensile
+  const ctx = document.getElementById('c-movimenti-trend')?.getContext('2d');
+  if (!ctx) return;
+  if (_chMovTrend) _chMovTrend.destroy();
+  _chMovTrend = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels: DA.MESI_LABEL,
+      datasets:[
+        { label:'Ingressi',     data: mv.ingressi, borderColor:'#10b981', backgroundColor:'rgba(16,185,129,.10)', tension:.35, fill:true, borderWidth:2 },
+        { label:'Uscite',       data: mv.uscite,   borderColor:'#3b82f6', backgroundColor:'rgba(59,130,246,.05)', tension:.35, fill:false, borderWidth:2 },
+        { label:'Allontamenti', data: mv.allont,   borderColor:'#f59e0b', tension:.35, fill:false, borderWidth:2, borderDash:[4,3] },
+        { label:'Revoche',      data: mv.revoche,  borderColor:'#ef4444', tension:.35, fill:false, borderWidth:2, borderDash:[2,2] },
+      ]
+    },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom', labels:{ font:{ size:10 } } } },
+      scales:{ y:{ beginAtZero:true } }
+    }
+  });
+}
+
+// ─── 👨‍👩‍👧 NUCLEI FAMILIARI — Zoho Creator ────────────────────────────
+async function loadNucleiFamiliari() {
+  const box = document.getElementById('nuclei-stats');
+  if (!box || !window.LIVE?.creator?.getRecords) return;
+  try {
+    // Prova report Nuclei_Familiari_Portal (gestione-accoglienza)
+    const rows = await window.LIVE.creator.getRecords('gestione-accoglienza', 'Nuclei_Familiari_Portal', { max_records: 1000 });
+    if (!rows || rows.length === 0) {
+      box.innerHTML = `
+        <div style="color:var(--text3);">Nessun nucleo trovato in <code>Nuclei_Familiari_Portal</code>. Probabili cause: permessi report o report vuoto.</div>
+        <div style="margin-top:6px;font-size:10px;color:var(--text3);">Per estendere: aggiungere altri report Zoho (es. Anagrafica_Ospiti_Report).</div>`;
+      return;
+    }
+    // Aggregati base
+    const totNuclei = rows.length;
+    // Conta per CdC se disponibile
+    const byCdc = {};
+    rows.forEach(r => {
+      const cdc = (r.Centro?.zc_display_value || r['Centro di Costo']?.zc_display_value || '—');
+      byCdc[cdc] = (byCdc[cdc]||0) + 1;
+    });
+    const cdcRows = Object.entries(byCdc).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    box.innerHTML = `
+      <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px;">
+        <div><span style="font-size:22px;font-weight:800;color:var(--text1);">${totNuclei}</span>
+          <span style="font-size:11px;color:var(--text3);margin-left:6px;">nuclei totali</span></div>
+        <div><span style="font-size:22px;font-weight:800;color:var(--text1);">${Object.keys(byCdc).length}</span>
+          <span style="font-size:11px;color:var(--text3);margin-left:6px;">CdC con nuclei</span></div>
+      </div>
+      <table style="width:100%;font-size:11px;border-collapse:collapse;">
+        <thead><tr style="border-bottom:1px solid var(--border);"><th style="text-align:left;padding:4px 8px;font-size:10px;color:var(--text3);text-transform:uppercase;">CdC</th><th style="text-align:right;padding:4px 8px;font-size:10px;color:var(--text3);text-transform:uppercase;">Nuclei</th></tr></thead>
+        <tbody>${cdcRows.map(([c,n])=>`<tr><td style="padding:4px 8px;">${c}</td><td style="padding:4px 8px;text-align:right;font-weight:600;">${n}</td></tr>`).join('')}</tbody>
+      </table>`;
+  } catch (e) {
+    box.innerHTML = `<div style="color:#f87171;">⚠️ Errore caricamento nuclei: ${e.message||e}</div>`;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', renderAll);
+</script>
+</body>
+</html>

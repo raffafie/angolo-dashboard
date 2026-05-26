@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="athena-static-only" content="true"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Immobili — Dashboard Analytics</title>
+<link rel="stylesheet" href="shared/style.css?v=20260525-1800">
+<style>
+.ticket-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius); padding:12px 14px;
+  display:flex; justify-content:space-between; align-items:flex-start;
+  margin-bottom:8px; font-size:12px;
+}
+.ticket-card:hover { border-color:var(--border2); }
+.ticket-state {
+  padding:2px 8px; border-radius:4px; font-size:10px; font-weight:700;
+  text-transform:uppercase;
+}
+.ts-aperto    { background:rgba(239,68,68,.15); color:#f87171; }
+.ts-corso     { background:rgba(245,158,11,.15); color:#fbbf24; }
+.ts-chiuso    { background:rgba(16,185,129,.15); color:#34d399; }
+.ts-pianif    { background:rgba(59,130,246,.15); color:#60a5fa; }
+
+.struct-row {
+  display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1fr;
+  gap:8px; padding:10px 12px; border-bottom:1px solid var(--border);
+  font-size:12px; align-items:center;
+}
+.struct-row:last-child { border-bottom:none; }
+.struct-row.header { color:var(--text2); font-weight:600; font-size:11px; text-transform:uppercase; }
+</style>
+</head>
+<body data-page="immobili">
+<div id="topbar" class="topbar"></div>
+<div id="data-mode-bar" class="data-bar static mb-16"><span class="dot"></span>Caricamento dati...</div>
+
+<div class="main">
+
+  <div class="page-header">
+    <h1><span class="icon">🏢</span> Immobili &amp; Manutenzioni</h1>
+    <p>Stato ticket manutenzione, costi struttura, ispezioni edifici — Dati da Zoho Analytics</p>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="filters">
+    <label>Anno:</label>
+    <select id="f-anno" onchange="renderAll()">
+      <option value="2025" selected>2025</option>
+      <option value="2026">2026 (n.d.)</option>
+    </select>
+    <label>Centro:</label>
+    <select id="f-cdc" onchange="renderAll()">
+      <option value="all">Tutti i centri</option>
+      <option value="PISA">CAS PISA</option>
+      <option value="RIETI">CAD RIETI</option>
+      <option value="DROSSO">DROSSO</option>
+      <option value="LORANZE">LORANZÈ</option>
+      <option value="VICENZA">VICENZA</option>
+      <option value="MODENA">MODENA IMMIGRAZIONE</option>
+      <option value="VICO">VICO-VALCHIUSA</option>
+      <option value="CAMBO">CAMPOBASSO</option>
+    </select>
+    <button class="btn-apply" onclick="renderAll()">↻ Aggiorna</button>
+  </div>
+
+  <!-- KPI -->
+  <div class="kpi-grid" id="kpi-imm"></div>
+
+  <!-- Charts stato ticket e costi struttura -->
+  <div class="chart-grid cols-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#3b82f6"></span>Stato ticket manutenzione — Modena Costellazioni (Zoho Creator)</div>
+      <div class="chart-wrap" style="height:240px"><canvas id="c-ticket-stato"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#f59e0b"></span>Costi struttura per CdC (€ 2025)</div>
+      <div class="chart-wrap" style="height:240px"><canvas id="c-struttura"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Costi manutenzione -->
+  <div class="chart-grid cols-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#10b981"></span>Costi manutenzione per CdC (€)</div>
+      <div class="chart-wrap" style="height:240px"><canvas id="c-manut"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#8b5cf6"></span>Incidenza costi immobili su totale %</div>
+      <div class="chart-wrap" style="height:240px"><canvas id="c-incid-imm"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Stato strutture -->
+  <div class="section-title">🏗️ Riepilogo Costi Immobili per CdC</div>
+  <div class="chart-card">
+    <div class="struct-row header">
+      <div>Centro</div><div>Struttura</div><div>Manutenzioni</div><div>% su tot costi</div><div>€/ospite/anno</div>
+    </div>
+    <div id="struct-rows"></div>
+  </div>
+
+  <!-- Ticket reali Zoho Creator -->
+  <div class="section-title">🔧 Interventi Manutentivi Reali — Costellazioni Modena (Nov 2024 · Zoho Creator)</div>
+  <div id="ticket-list"></div>
+
+  <!-- TEMPI DI RISOLUZIONE TICKET — DATI REALI ZOHO -->
+  <div class="section-title" style="margin-top:24px">⏱️ Tempi di Risoluzione Ticket — Statistiche Reali (Zoho Creator)</div>
+
+  <!-- KPI risoluzione -->
+  <div class="kpi-grid" id="kpi-ticket-times"></div>
+
+  <div class="chart-grid cols-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#10b981"></span>Distribuzione Tempi Risoluzione (3.051 ticket conclusi)</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-ticket-distr"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#3b82f6"></span>Ticket Aperti per CdC (fonte: Zoho Creator)</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-ticket-cdc"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Tabella riepilogo per CdC -->
+  <div class="chart-card" style="margin-top:14px">
+    <div style="font-size:12px;font-weight:700;color:var(--text2);padding:0 0 12px;text-transform:uppercase;letter-spacing:.05em">
+      Riepilogo per Centro di Costo
+    </div>
+    <div id="ticket-cdc-rows"></div>
+  </div>
+
+  <!-- 🏁 COMPLETAMENTO LAVORI — gauge per CdC -->
+  <div class="section-title" style="margin-top:24px">🏁 Completamento lavori per CdC</div>
+  <div class="chart-card">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px;">
+      <strong>Completamento</strong> = conclusi ÷ (conclusi + aperti) · <strong>Tempo medio</strong> = giorni medi risoluzione ticket conclusi · <strong>Backlog</strong> = ticket ancora aperti.
+    </div>
+    <div id="completamento-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;"></div>
+  </div>
+
+  <div class="alert alert-info" style="margin-top:16px">
+    ℹ️ I dati in sezione "Interventi Manutentivi" provengono dalla tabella <strong>Richieste di Manutenzione</strong> in Zoho Creator — campione reale Costellazioni (Modena), Novembre 2024.
+    Statistiche aggregate su tutto il parco immobiliare: <strong>3.125 ticket totali</strong>, di cui <strong>3.051 conclusi</strong> e <strong>74 aperti</strong>.
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<script src="shared/data.js?v=20260525-1800"></script>
+<script src="shared/filters.js?v=20260525-1800"></script>
+<script src="shared/live.js?v=20260525-1800"></script>
+<script src="shared/nav.js?v=20260525-1800"></script>
+<script>
+const ALL_KEYS = ['PISA','DROSSO','LORANZE','VICENZA','RIETI','MODENA','VICO','CAMBO'];
+function getKeys(){
+  const v = document.getElementById('f-cdc')?.value || 'all';
+  return v === 'all' ? ALL_KEYS : ALL_KEYS.filter(k=>k===v);
+}
+
+// Ticket manutenzione reali — fonte: Zoho Creator "Richieste di Manutenzione"
+// Centro: MODENA IMMIGRAZIONE — Costellazioni (CC) — Novembre 2024
+// Aggiornato: Aprile 2026
+const TICKETS = [
+  {id:'COT-001',cdc:'MODENA',desc:'Stanza 1001 — porta rotta',                         stato:'chiuso', data:'05/11/2024',priority:'alta', costo:180},
+  {id:'COT-002',cdc:'MODENA',desc:'Stanza 1305 — specchio bagno da fissare',            stato:'chiuso', data:'05/11/2024',priority:'media',costo:80},
+  {id:'COT-003',cdc:'MODENA',desc:'Stanza 1304 — prese elettriche cortocircuito',       stato:'chiuso', data:'05/11/2024',priority:'media',costo:320},
+  {id:'COT-004',cdc:'MODENA',desc:'Piano 1 uffici — porta verde non chiude bene',       stato:'chiuso', data:'05/11/2024',priority:'media',costo:120},
+  {id:'COT-005',cdc:'MODENA',desc:'Stanza 1210 — lavandino otturato + disinfestazione', stato:'chiuso', data:'05/11/2024',priority:'media',costo:450},
+  {id:'COT-006',cdc:'MODENA',desc:'Stanza 1304 — tutte le prese in corto circuito',     stato:'chiuso', data:'06/11/2024',priority:'alta', costo:480},
+  {id:'COT-007',cdc:'MODENA',desc:'Stanza 1012 — presenza cimici (disinfestazione)',    stato:'chiuso', data:'08/11/2024',priority:'alta', costo:650},
+  {id:'COT-008',cdc:'MODENA',desc:'Stanza 1306 — presenza topi nel controsoffitto',     stato:'chiuso', data:'08/11/2024',priority:'alta', costo:850},
+  {id:'COT-009',cdc:'MODENA',desc:'Stanza 1405 — perdita d\'acqua dal soffitto',        stato:'chiuso', data:'08/11/2024',priority:'alta', costo:380},
+  {id:'COT-010',cdc:'MODENA',desc:'Stanza 1411 — perdita parete + sanitari otturati',   stato:'chiuso', data:'08/11/2024',priority:'alta', costo:520},
+  {id:'COT-011',cdc:'MODENA',desc:'Stanza 1409 — mancanza acqua calda',                 stato:'chiuso', data:'08/11/2024',priority:'alta', costo:290},
+  {id:'COT-012',cdc:'MODENA',desc:'Stanza 1301 — disinfestazione + riscaldamento guasto',stato:'chiuso',data:'09/11/2024',priority:'alta', costo:720},
+  {id:'COT-013',cdc:'MODENA',desc:'Stanza 607 — porta stanza non chiude',               stato:'chiuso', data:'09/11/2024',priority:'alta', costo:160},
+  {id:'COT-014',cdc:'MODENA',desc:'Cucina 4B — lavandino otturato + allagamento',       stato:'chiuso', data:'10/11/2024',priority:'alta', costo:410},
+  {id:'COT-015',cdc:'MODENA',desc:'Stanza 710 — scarico WC rotto/infiltrazione',        stato:'chiuso', data:'12/11/2024',priority:'alta', costo:340},
+  {id:'COT-016',cdc:'MODENA',desc:'Stanza 703 — perdita acqua sotto lavandino',         stato:'chiuso', data:'14/11/2024',priority:'media',costo:210},
+  {id:'COT-017',cdc:'MODENA',desc:'Stanza 1009 — rubinetti flusso scarso + finestra',   stato:'chiuso', data:'14/11/2024',priority:'media',costo:180},
+  {id:'COT-018',cdc:'MODENA',desc:'Reception — lavandino otturato',                     stato:'chiuso', data:'15/11/2024',priority:'media',costo:130},
+  {id:'COT-019',cdc:'MODENA',desc:'Stanza 707 — doccia otturata + allagamento bagno',   stato:'chiuso', data:'18/11/2024',priority:'alta', costo:290},
+  {id:'COT-020',cdc:'MODENA',desc:'Stanza 605 — scarafaggi (disinfestazione)',           stato:'chiuso', data:'18/11/2024',priority:'media',costo:580},
+  {id:'COT-021',cdc:'MODENA',desc:'Stanza 706 — scarico doccia bloccato',               stato:'chiuso', data:'18/11/2024',priority:'alta', costo:190},
+  {id:'COT-022',cdc:'MODENA',desc:'Stanza 1114 — verifica chimici (disinfestazione)',   stato:'chiuso', data:'19/11/2024',priority:'alta', costo:620},
+];
+
+function renderKpi(){
+  const keys = getKeys();
+  const totStruttura = keys.reduce((s,k)=>s+((DA.COSTI_CAT[k]||{}).STRUTTURA||0),0);
+  const totManut     = keys.reduce((s,k)=>s+((DA.COSTI_CAT[k]||{}).MANUTENZIONI||0),0);
+  const totImm       = totStruttura+totManut;
+  const totCosti     = keys.reduce((s,k)=>s+((DA.COSTI_CAT[k]||{}).TOTALE||0),0);
+  const pct          = (totImm/totCosti*100).toFixed(1);
+  const aperti       = TICKETS.filter(t=>t.stato==='aperto').length;
+  const kpis=[
+    {icon:'🏢',val:'€'+DA.fmtK(totStruttura),label:'Costo struttura 2025',   col:'kpi-blue'},
+    {icon:'🔧',val:'€'+DA.fmtK(totManut),    label:'Costo manutenzioni 2025',col:'kpi-amber'},
+    {icon:'🏗️',val:'€'+DA.fmtK(totImm),     label:'Totale immobili',        col:'kpi-violet'},
+    {icon:'📊',val:pct+'%',                  label:'Incidenza su costi',     col:'kpi-pink'},
+    {icon:'🔴',val:aperti,                   label:'Ticket aperti',          col:aperti>3?'kpi-red':'kpi-green'},
+    {icon:'📝',val:TICKETS.length,           label:'Ticket totali',          col:'kpi-cyan'},
+  ];
+  document.getElementById('kpi-imm').innerHTML=kpis.map(k=>`
+    <div class="kpi-card ${k.col}">
+      <div class="kpi-icon">${k.icon}</div>
+      <div class="kpi-val sm">${k.val}</div>
+      <div class="kpi-label">${k.label}</div>
+    </div>`).join('');
+}
+
+function renderTicketStato(){
+  const stati=['aperto','corso','chiuso','pianif'];
+  const counts=stati.map(s=>TICKETS.filter(t=>t.stato===s).length);
+  const colors=['#ef4444cc','#f59e0bcc','#10b981cc','#3b82f6cc'];
+  DA.mkChart('c-ticket-stato',{type:'doughnut',
+    data:{labels:['Aperto','In Corso','Chiuso','Pianificato'],
+      datasets:[{data:counts,backgroundColor:colors,borderColor:'#0d1526',borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'55%',
+      plugins:{legend:{position:'bottom',labels:{font:{size:11}}}}}
+  });
+}
+
+function renderStruttura(){
+  const keys = getKeys();
+  DA.mkChart('c-struttura',{type:'bar',
+    data:{labels:keys.map(k=>DA.CDC[k].label),
+      datasets:[{
+        label:'Costo struttura',
+        data:keys.map(k=>(DA.COSTI_CAT[k]||{}).STRUTTURA||0),
+        backgroundColor:keys.map(k=>DA.CDC[k].color+'cc'),
+        borderColor:keys.map(k=>DA.CDC[k].color),
+        borderWidth:1,borderRadius:4,
+      }]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{title:{display:true,text:'€',color:'#546a87'}}}}
+  });
+}
+
+function renderManut(){
+  const keys = getKeys();
+  DA.mkChart('c-manut',{type:'bar',
+    data:{labels:keys.map(k=>DA.CDC[k].label),
+      datasets:[{
+        label:'Costo manutenzioni',
+        data:keys.map(k=>(DA.COSTI_CAT[k]||{}).MANUTENZIONI||0),
+        backgroundColor:'#10b981cc',borderColor:'#10b981',borderWidth:1,borderRadius:4,
+      }]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{title:{display:true,text:'€',color:'#546a87'}}}}
+  });
+}
+
+function renderIncidImm(){
+  const keys = getKeys();
+  DA.mkChart('c-incid-imm',{type:'bar',
+    data:{labels:keys.map(k=>DA.CDC[k].label),
+      datasets:[
+        {label:'Struttura %',
+         data:keys.map(k=>{ const d=DA.COSTI_CAT[k]||{}; return d.TOTALE>0?((d.STRUTTURA||0)/d.TOTALE*100).toFixed(1):0; }),
+         backgroundColor:'#8b5cf6cc',borderColor:'#8b5cf6',borderWidth:1,borderRadius:3},
+        {label:'Manutenzioni %',
+         data:keys.map(k=>{ const d=DA.COSTI_CAT[k]||{}; return d.TOTALE>0?((d.MANUTENZIONI||0)/d.TOTALE*100).toFixed(1):0; }),
+         backgroundColor:'#10b981cc',borderColor:'#10b981',borderWidth:1,borderRadius:3},
+      ]},
+    // REFACTOR UX (mag 2026): da stacked → grouped. Struttura % e Manutenzioni %
+    // sono due voci confrontabili, non un totale 100%. Grouped le distingue meglio.
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},
+      scales:{y:{beginAtZero:true,title:{display:true,text:'%',color:'#546a87'}}}}
+  });
+}
+
+function renderStructRows(){
+  const keys = getKeys();
+  document.getElementById('struct-rows').innerHTML = keys.map(k=>{
+    const cdc=DA.CDC[k], d=DA.COSTI_CAT[k]||{};
+    const str=d.STRUTTURA||0, man=d.MANUTENZIONI||0, tot=d.TOTALE||1;
+    const pct=((str+man)/tot*100).toFixed(1);
+    const osp=DA.OSPITI_MEDI[k]||1;
+    const epoa=osp>0?DA.fmt(Math.round((str+man)/osp)):'-';
+    return `<div class="struct-row">
+      <div><span class="cdc-pill ${cdc.pill}">${cdc.label}</span></div>
+      <div>€${DA.fmtK(str)}</div>
+      <div>€${DA.fmtK(man)}</div>
+      <div>${pct}%</div>
+      <div>€${epoa}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderTickets(){
+  const keys = getKeys();
+  const filteredTickets = keys.length === ALL_KEYS.length ? TICKETS : TICKETS.filter(t => keys.includes(t.cdc));
+  document.getElementById('ticket-list').innerHTML = filteredTickets.map(t=>{
+    const cdc=DA.CDC[t.cdc];
+    const stateMap={aperto:'ts-aperto',corso:'ts-corso',chiuso:'ts-chiuso',pianif:'ts-pianif'};
+    const stateLabel={aperto:'Aperto',corso:'In Corso',chiuso:'Chiuso',pianif:'Pianificato'};
+    return `<div class="ticket-card">
+      <div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${t.id} · <span class="cdc-pill ${cdc?.pill||''}">${cdc?.label||t.cdc}</span></div>
+        <div style="font-size:13px;font-weight:600">${t.desc}</div>
+        <div style="margin-top:4px;color:var(--text2);font-size:11px">Data: ${t.data} · Priorità: ${t.priority} · €${DA.fmt(t.costo)}</div>
+      </div>
+      <span class="ticket-state ${stateMap[t.stato]}">${stateLabel[t.stato]}</span>
+    </div>`;
+  }).join('');
+}
+
+// ─── TEMPI RISOLUZIONE TICKET ────────────────────────────
+
+function renderKpiTicketTimes(){
+  const ts = DA.TICKET_STATS;
+  const kpis = [
+    {icon:'📋',val:DA.fmt(ts.totale),      label:'Ticket totali',         col:'kpi-blue'},
+    {icon:'✅',val:DA.fmt(ts.conclusi),    label:'Ticket conclusi',       col:'kpi-green'},
+    {icon:'🔴',val:ts.aperti,             label:'Ticket aperti',         col:ts.aperti>50?'kpi-red':'kpi-amber'},
+    {icon:'⏱️',val:ts.mediana_giorni+'g', label:'Mediana risoluzione',   col:'kpi-violet'},
+    {icon:'📊',val:ts.media_giorni+'g',   label:'Media risoluzione',     col:'kpi-cyan'},
+    {icon:'🏆',val:ts.pct_sla_3g+'%',     label:'Risolti ≤ 3 giorni',   col:'kpi-green'},
+  ];
+  document.getElementById('kpi-ticket-times').innerHTML = kpis.map(k=>`
+    <div class="kpi-card ${k.col}">
+      <div class="kpi-icon">${k.icon}</div>
+      <div class="kpi-val sm">${k.val}</div>
+      <div class="kpi-label">${k.label}</div>
+    </div>`).join('');
+}
+
+function renderTicketDistr(){
+  const d = DA.TICKET_STATS.distribuzione;
+  DA.mkChart('c-ticket-distr',{type:'bar',
+    data:{
+      labels: d.map(b=>b.label),
+      datasets:[{
+        label:'N° ticket',
+        data:  d.map(b=>b.count),
+        backgroundColor: d.map(b=>b.color+'cc'),
+        borderColor:     d.map(b=>b.color),
+        borderWidth:1, borderRadius:4,
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{
+          afterLabel: ctx => {
+            const bd = DA.TICKET_STATS.distribuzione[ctx.dataIndex];
+            return `${bd.pct}% del totale`;
+          }
+        }}
+      },
+      scales:{
+        y:{title:{display:true,text:'N° ticket',color:'#546a87'}},
+        x:{ticks:{font:{size:10}}}
+      }
+    }
+  });
+}
+
+function renderTicketCdc(){
+  const cdcKeys = Object.keys(DA.TICKET_STATS.per_cdc);
+  const data    = DA.TICKET_STATS.per_cdc;
+  DA.mkChart('c-ticket-cdc',{type:'bar',
+    data:{
+      labels: cdcKeys.map(k=>DA.CDC[k]?.label||k),
+      datasets:[
+        {label:'Ticket aperti',
+         data:  cdcKeys.map(k=>data[k].aperti),
+         backgroundColor:'#ef4444cc',borderColor:'#ef4444',borderWidth:1,borderRadius:4},
+        {label:'Ticket conclusi',
+         data:  cdcKeys.map(k=>data[k].conclusi),
+         backgroundColor:'#10b981cc',borderColor:'#10b981',borderWidth:1,borderRadius:4},
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'top'}},
+      scales:{
+        x:{stacked:false},
+        y:{title:{display:true,text:'N° ticket',color:'#546a87'}}
+      }
+    }
+  });
+}
+
+function renderTicketCdcRows(){
+  const cdcData = DA.TICKET_STATS.per_cdc;
+  const rows = Object.entries(cdcData).map(([k,d])=>{
+    const cdc = DA.CDC[k];
+    const apCls = d.aperti > 10 ? 'ts-aperto' : d.aperti > 3 ? 'ts-corso' : 'ts-chiuso';
+    return `<div class="struct-row">
+      <div><span class="cdc-pill ${cdc?.pill||''}">${cdc?.label||k}</span></div>
+      <div>${d.conclusi}</div>
+      <div><span class="ticket-state ${apCls}">${d.aperti}</span></div>
+      <div>${d.media_giorni}g</div>
+      <div>${d.mediana_giorni}g</div>
+    </div>`;
+  }).join('');
+  document.getElementById('ticket-cdc-rows').innerHTML =
+    `<div class="struct-row header"><div>Centro</div><div>Conclusi</div><div>Aperti</div><div>Media giorni</div><div>Mediana giorni</div></div>` + rows;
+}
+
+// ─── 🏁 COMPLETAMENTO LAVORI per CdC (gauge) ─────────────────────────────
+function renderCompletamento() {
+  const grid = document.getElementById('completamento-grid');
+  if (!grid || !window.DA?.TICKET_STATS?.per_cdc) return;
+  const per = DA.TICKET_STATS.per_cdc;
+  const items = Object.entries(per).map(([cdc, d]) => {
+    const tot = (d.conclusi||0) + (d.aperti||0);
+    const pct = tot > 0 ? (d.conclusi / tot * 100) : 0;
+    const meta = DA.CDC[cdc] || {};
+    let color = '#10b981';
+    if (pct < 90) color = '#f59e0b';
+    if (pct < 75) color = '#ef4444';
+    // Tempo medio risoluzione
+    const tempoColor = d.media_giorni > 25 ? '#ef4444' : d.media_giorni > 12 ? '#f59e0b' : '#10b981';
+    return `
+      <div style="background:rgba(15,23,42,.5);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:12px 14px;border-left:3px solid ${color};">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div style="font-size:11px;font-weight:700;color:var(--text1);">${meta.label || cdc}</div>
+          <div style="font-size:9px;background:rgba(255,255,255,.06);padding:2px 6px;border-radius:8px;color:var(--text3);">${meta.tipo||'?'}</div>
+        </div>
+        <div style="font-size:24px;font-weight:800;color:${color};line-height:1;">${pct.toFixed(1)}%</div>
+        <div style="font-size:9.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;">completamento</div>
+        <div style="height:6px;background:var(--surface2);border-radius:3px;margin:6px 0;overflow:hidden;">
+          <div style="height:100%;border-radius:3px;background:${color};width:${pct}%;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);">
+          <span>✅ ${d.conclusi} conclusi</span>
+          <span style="color:${d.aperti>10?'#f87171':'var(--text3)'};">⏳ ${d.aperti} aperti</span>
+        </div>
+        <div style="font-size:10px;color:var(--text2);margin-top:4px;">
+          ⏱️ <span style="color:${tempoColor};font-weight:600;">${d.media_giorni.toFixed(1)}gg</span> media · mediana ${d.mediana_giorni}gg
+        </div>
+      </div>`;
+  }).join('');
+  grid.innerHTML = items;
+}
+
+function renderAll(){
+  DA.chartDefaults(Chart);
+  renderKpi(); renderTicketStato(); renderStruttura(); renderManut();
+  renderIncidImm(); renderStructRows(); renderTickets();
+  renderKpiTicketTimes(); renderTicketDistr(); renderTicketCdc(); renderTicketCdcRows();
+  renderCompletamento();
+}
+document.addEventListener('DOMContentLoaded', renderAll);
+</script>
+</body>
+</html>

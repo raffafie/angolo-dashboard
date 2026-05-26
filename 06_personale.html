@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="athena-static-only" content="true"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Personale HR — Dashboard Analytics</title>
+<link rel="stylesheet" href="shared/style.css?v=20260525-1800">
+</head>
+<body data-page="personale">
+<div id="topbar" class="topbar"></div>
+<div id="data-mode-bar" class="data-bar static mb-16"><span class="dot"></span>Caricamento dati...</div>
+
+<div class="main">
+
+  <div class="page-header">
+    <h1><span class="icon">👥</span> Personale &amp; HR</h1>
+    <p>Costi orari per mansione, ore lavorate per CdC, struttura organizzativa — Dati da Zoho Analytics</p>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="filters">
+    <label>Anno:</label>
+    <select id="f-anno" onchange="renderAll()">
+      <option value="2025" selected>2025</option>
+      <option value="2026">2026 (n.d.)</option>
+    </select>
+    <label>Centro:</label>
+    <select id="f-cdc" onchange="filterHR()">
+      <option value="all">Tutti i centri</option>
+      <option value="RIETI">CAD RIETI</option>
+      <option value="PISA">CAS PISA</option>
+      <option value="DROSSO">DROSSO</option>
+      <option value="LORANZE">LORANZÈ</option>
+      <option value="MODENA">MODENA</option>
+      <option value="VICENZA">VICENZA</option>
+      <option value="VICO">VICO-VALCHIUSA</option>
+    </select>
+    <button class="btn-apply" onclick="filterHR()">↻ Aggiorna</button>
+  </div>
+
+  <!-- KPI -->
+  <div class="kpi-grid" id="kpi-hr"></div>
+
+  <!-- Ore e costi per CdC -->
+  <div class="chart-grid cols-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#3b82f6"></span>Costo totale personale per CdC (€ 2025)</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-costo-cdc"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#10b981"></span>Costo orario medio (€/h) per CdC</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-euro-h"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Ore per CdC -->
+  <div class="chart-grid cols-full">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#8b5cf6"></span>Ore lavorate per centro di costo — anno 2025</div>
+      <div class="chart-wrap" style="height:240px"><canvas id="c-ore-cdc"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Dettaglio mansioni per CdC -->
+  <div class="section-title">👤 Dettaglio Costi per Mansione</div>
+
+  <div class="chart-grid cols-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#3b82f6"></span>CAS PISA — Ore per mansione</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-ore-pisa"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#8b5cf6"></span>DROSSO — Ore per mansione</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-ore-drosso"></canvas></div>
+    </div>
+  </div>
+
+  <div class="chart-grid cols-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#06b6d4"></span>MODENA IMMIGRAZIONE — Costo per mansione</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-costo-modena"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#ec4899"></span>CAD RIETI — Ore per mansione</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-ore-rieti"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Tabella comparativa costi orari -->
+  <div class="section-title">💶 Tabella Costi Orari per CdC</div>
+  <div class="chart-card">
+    <div style="overflow-x:auto"><table class="data-table" id="t-hr"></table></div>
+  </div>
+
+  <!-- Note -->
+  <div class="alert alert-info" style="margin-top:16px">
+    ℹ️ I dati provengono dalla tabella <strong>"Costi orari CAS"</strong> di Zoho Analytics. MODENA IMMIGRAZIONE ha il maggior volume di ore: 237.227h/anno per €4,7M di costo personale.
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<script src="shared/data.js?v=20260525-1800"></script>
+<script src="shared/filters.js?v=20260525-1800"></script>
+<script src="shared/live.js?v=20260525-1800"></script>
+<script src="shared/nav.js?v=20260525-1800"></script>
+<script>
+const HR_KEYS = Object.keys(DA.COSTI_ORE);
+const MANS_COLORS = ['#3b82f6','#10b981','#8b5cf6','#f59e0b','#ec4899','#06b6d4','#ef4444','#6366f1','#14b8a6','#f97316'];
+
+function getHRKeys(){
+  const v = document.getElementById('f-cdc')?.value || 'all';
+  return v === 'all' ? HR_KEYS : HR_KEYS.filter(k => k === v);
+}
+
+function filterHR(){
+  DA.chartDefaults(Chart);
+  const keys = getHRKeys();
+  renderKpi(); renderCostoCdc(); renderEuroH(); renderOreCdc(); renderTable();
+}
+
+function renderKpi(){
+  const keys=getHRKeys();
+  const totOre=keys.reduce((s,k)=>s+DA.COSTI_ORE[k].ore,0);
+  const totCosto=keys.reduce((s,k)=>s+DA.COSTI_ORE[k].costo,0);
+  const avgH=totOre>0?totCosto/totOre:0;
+  const maxOre=Math.max(...keys.map(k=>DA.COSTI_ORE[k].ore));
+  const maxK=keys.find(k=>DA.COSTI_ORE[k].ore===maxOre)||keys[0];
+  const kpis=[
+    {icon:'⏱️',val:DA.fmtK(totOre),    label:'Ore lavorate totali 2025', col:'kpi-blue'},
+    {icon:'💶',val:'€'+DA.fmtK(totCosto),label:'Costo totale personale',  col:'kpi-amber'},
+    {icon:'📊',val:'€'+avgH.toFixed(2), label:'Costo orario medio',       col:'kpi-violet'},
+    {icon:'🏆',val:DA.CDC[maxK]?.label||maxK,label:'CdC con più ore',     col:'kpi-green'},
+  ];
+  document.getElementById('kpi-hr').innerHTML=kpis.map(k=>`
+    <div class="kpi-card ${k.col}">
+      <div class="kpi-icon">${k.icon}</div>
+      <div class="kpi-val sm">${k.val}</div>
+      <div class="kpi-label">${k.label}</div>
+    </div>`).join('');
+}
+
+function renderCostoCdc(){
+  const keys=getHRKeys();
+  DA.mkChart('c-costo-cdc',{type:'bar',
+    data:{labels:keys.map(k=>DA.CDC[k]?.label||k),
+      datasets:[{
+        label:'Costo personale',
+        data:keys.map(k=>DA.COSTI_ORE[k].costo),
+        backgroundColor:keys.map(k=>DA.CDC[k]?.color+'cc'||'#3b82f6cc'),
+        borderColor:keys.map(k=>DA.CDC[k]?.color||'#3b82f6'),
+        borderWidth:1,borderRadius:4,
+      }]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{title:{display:true,text:'€',color:'#546a87'}}}}
+  });
+}
+
+function renderEuroH(){
+  const keys=getHRKeys();
+  DA.mkChart('c-euro-h',{type:'bar',
+    data:{labels:keys.map(k=>DA.CDC[k]?.label||k),
+      datasets:[{
+        label:'€/h',
+        data:keys.map(k=>DA.COSTI_ORE[k].euro_h),
+        backgroundColor:'#10b981cc',borderColor:'#10b981',borderWidth:1,borderRadius:4,
+      }]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{title:{display:true,text:'€/h',color:'#546a87'},min:10}}}
+  });
+}
+
+function renderOreCdc(){
+  const keys=getHRKeys();
+  DA.mkChart('c-ore-cdc',{type:'bar',
+    data:{labels:keys.map(k=>DA.CDC[k]?.label||k),
+      datasets:[{
+        label:'Ore lavorate',
+        data:keys.map(k=>DA.COSTI_ORE[k].ore),
+        backgroundColor:keys.map(k=>DA.CDC[k]?.color+'bb'||'#8b5cf6bb'),
+        borderColor:keys.map(k=>DA.CDC[k]?.color||'#8b5cf6'),
+        borderWidth:1,borderRadius:4,
+      }]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{title:{display:true,text:'Ore',color:'#546a87'}}}}
+  });
+}
+
+function renderMansioni(id, mansKey, color){
+  const mans = DA.MANSIONI[mansKey];
+  if(!mans){ return; }
+  const sorted = [...mans].sort((a,b)=>b.h-a.h).slice(0,8);
+  DA.mkChart(id,{type:'bar',
+    data:{labels:sorted.map(m=>m.r.replace('OPERATORE/TRICE CENTRO ACCOGLIENZA','Op. Centro Acc.').replace('ADDETTO/A','Add.').substring(0,24)),
+      datasets:[{label:'Ore lavorate',data:sorted.map(m=>m.h),
+        backgroundColor:MANS_COLORS.map(c=>c+'cc'),borderColor:MANS_COLORS,borderWidth:1,borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      indexAxis:'y',scales:{x:{title:{display:true,text:'Ore',color:'#546a87'}}}}
+  });
+}
+
+function renderCostoMansioni(id, mansKey){
+  const mans = DA.MANSIONI[mansKey];
+  if(!mans){ return; }
+  const sorted = [...mans].sort((a,b)=>b.c-a.c).slice(0,8);
+  DA.mkChart(id,{type:'bar',
+    data:{labels:sorted.map(m=>m.r.replace('OPERATORE/TRICE CENTRO ACCOGLIENZA','Op. C. Acc.').replace('ADDETTO/A','Add.').substring(0,24)),
+      datasets:[{label:'Costo €',data:sorted.map(m=>m.c),
+        backgroundColor:'#06b6d4cc',borderColor:'#06b6d4',borderWidth:1,borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      indexAxis:'y',scales:{x:{title:{display:true,text:'€',color:'#546a87'}}}}
+  });
+}
+
+function renderTable(){
+  const keys=getHRKeys();
+  const ths='<thead><tr><th>Centro</th><th>Ore Lavorate</th><th>Costo Personale</th><th>€/h Medio</th><th>% su Totale</th></tr></thead>';
+  const totOre=keys.reduce((s,k)=>s+DA.COSTI_ORE[k].ore,0);
+  const totCosto=keys.reduce((s,k)=>s+DA.COSTI_ORE[k].costo,0);
+  const rows=[...keys].sort((a,b)=>DA.COSTI_ORE[b].ore-DA.COSTI_ORE[a].ore).map(k=>{
+    const d=DA.COSTI_ORE[k];
+    const cdc=DA.CDC[k];
+    const pctOre=(d.ore/totOre*100).toFixed(1);
+    const pctC=(d.costo/totCosto*100).toFixed(1);
+    return `<tr>
+      <td><span class="cdc-pill ${cdc?.pill||''}">${cdc?.label||k}</span></td>
+      <td class="num">${DA.fmt(d.ore)}</td>
+      <td class="num">€${DA.fmtK(d.costo)}</td>
+      <td class="num">€${d.euro_h.toFixed(2)}</td>
+      <td class="num">
+        <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end">
+          ${pctOre}% ore
+          <div class="progress-bar" style="width:60px"><div class="progress-fill" style="width:${pctOre}%;background:${cdc?.color||'#3b82f6'}"></div></div>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+  const tot=`<tr style="background:rgba(59,130,246,.06)">
+    <td style="font-weight:700">TOTALE</td>
+    <td class="num" style="font-weight:600">${DA.fmt(totOre)}</td>
+    <td class="num" style="font-weight:600">€${DA.fmtK(totCosto)}</td>
+    <td class="num" style="font-weight:600">€${(totCosto/totOre).toFixed(2)}</td>
+    <td class="num">100%</td>
+  </tr>`;
+  document.getElementById('t-hr').innerHTML=ths+'<tbody>'+rows+tot+'</tbody>';
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  DA.chartDefaults(Chart);
+  renderKpi(); renderCostoCdc(); renderEuroH(); renderOreCdc();
+  renderMansioni('c-ore-pisa','PISA','#3b82f6');
+  renderMansioni('c-ore-drosso','DROSSO','#8b5cf6');
+  renderCostoMansioni('c-costo-modena','MODENA');
+  renderMansioni('c-ore-rieti','RIETI','#10b981');
+  renderTable();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="athena-static-only" content="true"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HR &amp; Assenteismo — Dashboard Analytics</title>
+<link rel="stylesheet" href="shared/style.css?v=20260525-1800">
+<style>
+/* ── CONTRATTI LEGEND ── */
+.contratto-legend {
+  display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;
+}
+.contratto-badge {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:4px 12px; border-radius:14px; font-size:11px; font-weight:600;
+  border:1px solid transparent;
+}
+.c-ti   { background:rgba(59,130,246,.15);  border-color:rgba(59,130,246,.4);  color:#93c5fd; }
+.c-td   { background:rgba(16,185,129,.15);  border-color:rgba(16,185,129,.4);  color:#6ee7b7; }
+.c-pt   { background:rgba(245,158,11,.15);  border-color:rgba(245,158,11,.4);  color:#fcd34d; }
+.c-app  { background:rgba(139,92,246,.15);  border-color:rgba(139,92,246,.4);  color:#c4b5fd; }
+
+/* ── HR TABLE ── */
+.hr-row {
+  display:grid;
+  grid-template-columns:160px 60px 60px 60px 80px 80px 60px 60px 80px;
+  gap:4px; padding:8px 12px; border-bottom:1px solid var(--border);
+  font-size:12px; align-items:center;
+}
+.hr-row.header {
+  color:var(--text2); font-weight:600; font-size:10px;
+  text-transform:uppercase; background:rgba(59,130,246,.04);
+}
+.hr-row:last-child { border-bottom:none; }
+.hr-num { text-align:right; font-variant-numeric:tabular-nums; }
+.hr-bar-wrap { display:flex; gap:2px; align-items:center; height:6px; border-radius:3px; overflow:hidden; }
+.hr-seg { height:100%; border-radius:2px; }
+
+/* ── ASSENTEISMO TABLE ── */
+.ass-row {
+  display:grid;
+  grid-template-columns:1fr 90px 90px 70px;
+  gap:4px; padding:7px 12px; border-bottom:1px solid var(--border);
+  font-size:12px; align-items:center;
+}
+.ass-row.header {
+  color:var(--text2); font-weight:600; font-size:10px;
+  text-transform:uppercase; background:rgba(59,130,246,.04);
+}
+.ass-row:last-child { border-bottom:none; }
+.ass-num { text-align:right; font-variant-numeric:tabular-nums; }
+.ass-bar { height:6px; border-radius:3px; background:var(--surface2); margin-top:3px; overflow:hidden; }
+.ass-bar-fill { height:100%; border-radius:3px; background:var(--accent2); transition:width .4s; }
+
+/* ── MALATTIA GAUGE ── */
+.mal-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius); padding:14px 16px;
+  display:flex; align-items:center; gap:14px;
+}
+.mal-card:hover { border-color:var(--border2); }
+.mal-pct {
+  font-size:26px; font-weight:800; min-width:64px; text-align:center;
+  line-height:1;
+}
+.mal-pct.low    { color:#10b981; }
+.mal-pct.mid    { color:#f59e0b; }
+.mal-pct.high   { color:#ef4444; }
+.mal-info { flex:1; min-width:0; }
+.mal-cdc  { font-size:13px; font-weight:700; margin-bottom:3px; }
+.mal-sub  { font-size:11px; color:var(--text2); }
+.mal-bar  { height:5px; border-radius:3px; background:var(--surface2); margin-top:6px; overflow:hidden; }
+.mal-bar-fill { height:100%; border-radius:3px; transition:width .4s; }
+
+.mal-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px; margin-bottom:24px; }
+</style>
+</head>
+<body data-page="hr">
+<div id="topbar" class="topbar"></div>
+<div id="data-mode-bar" class="data-bar static mb-16"><span class="dot"></span>Caricamento dati...</div>
+
+<div class="main">
+
+  <div class="page-header">
+    <h1><span class="icon">🏥</span> HR &amp; Assenteismo</h1>
+    <p>Organico per CdC, assunzioni/cessazioni, tipologie contratto, malattie, infortuni e analisi assenteismo
+      <span style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);color:#34d399;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px">Storico Rapporto ATTIVO · 28/04/2026</span>
+    </p>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="filters">
+    <label>Anno:</label>
+    <select id="f-anno" onchange="renderAll()">
+      <option value="2025" selected>2025</option>
+      <option value="2026">2026 (n.d. — dati storico rapporto non ancora aggiornati)</option>
+    </select>
+    <label>Periodo:</label>
+    <select id="f-mese" onchange="renderAll()">
+      <option value="all" selected>Tutto l'anno</option>
+      <option value="0">Gennaio</option><option value="1">Febbraio</option>
+      <option value="2">Marzo</option><option value="3">Aprile</option>
+      <option value="4">Maggio</option><option value="5">Giugno</option>
+      <option value="6">Luglio</option><option value="7">Agosto</option>
+      <option value="8">Settembre</option><option value="9">Ottobre</option>
+      <option value="10">Novembre</option><option value="11">Dicembre</option>
+    </select>
+    <label>Centro:</label>
+    <select id="f-cdc" onchange="renderAll()">
+      <option value="all">Tutti i centri</option>
+      <option value="PISA">CAS PISA</option>
+      <option value="RIETI">CAD RIETI</option>
+      <option value="DROSSO">DROSSO</option>
+      <option value="LORANZE">LORANZÈ</option>
+      <option value="VICENZA">VICENZA</option>
+      <option value="MODENA">MODENA IMMIGRAZIONE</option>
+      <option value="VICO">VICO-VALCHIUSA</option>
+      <option value="CAMBO">CAMPOBASSO</option>
+    </select>
+    <button class="btn-apply" onclick="renderAll()">↻ Aggiorna</button>
+  </div>
+
+  <!-- KPI -->
+  <div class="kpi-grid" id="kpi-hr"></div>
+
+  <!-- CHARTS ROW 1: Malattia + Trend -->
+  <div class="chart-grid cols-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#ef4444"></span>Tasso Assenza Totale per CdC <span style="font-size:10px;color:var(--text2)">(ferie+malattia+permessi — <strong>esclusi maternità e infortuni</strong> — fonte ANALISI MALATTIE)</span></div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-malattia-bar"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#3b82f6"></span>Trend Assunzioni &amp; Cessazioni mensili (Totale Cooperativa)</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-hr-trend"></canvas></div>
+    </div>
+  </div>
+
+  <!-- CHARTS ROW 2: Contratti + Assenteismo tipi -->
+  <div class="chart-grid cols-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#10b981"></span>Tipologie Contratto per CdC (Stacked)</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-contratti"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#f59e0b"></span>Vero Assenteismo per Tipologia <span style="font-size:10px;color:var(--text2)">(MA+MO+MZ+MB+AI — esclusi Infortuni e Sospensione)</span></div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-assenteismo-tipi"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ALERT METODOLOGIA -->
+  <div class="alert alert-info" style="margin-bottom:8px">
+    📌 <strong>Definizione assenteismo adottata:</strong>
+    <strong>Assenteismo = Malattia (MA, MO, MZ) + Perm. Malattia Bimbo (MB) + Assenza Ingiustificata (AI).</strong>
+    <br><strong>Esclusi dall'assenteismo:</strong> Infortuni (categoria INAIL separata) · Sospensione Disciplinare · Ferie · Permessi contrattuali · Formazione.
+    <br>Il <em>tasso assenza totale</em> nelle card è calcolato da <code>ANALISI MALATTIE ED INFORTUNI (Avg INCIDENZA ORE LAVORATE)</code> — <strong>maternità e infortuni non compresi</strong>.
+    Il dettaglio malattia per singolo CdC richiede query live — disponibile dopo fix connettore Zoho.
+  </div>
+
+  <!-- 🚑 INFORTUNI INAIL — categoria separata da assenteismo -->
+  <div id="infortuni-callout" style="background:linear-gradient(135deg,rgba(234,88,12,.10) 0%,rgba(239,68,68,.05) 100%);border:1px solid rgba(234,88,12,.30);border-radius:10px;padding:14px 18px;margin-bottom:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:20px;">🚑</span>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text1);">Infortuni INAIL · categoria separata da assenteismo</div>
+          <div style="font-size:10.5px;color:var(--text3);">Pratica INAIL dedicata. Non incidono sul tasso assenteismo né su MA/MO/MZ/MB/AI.</div>
+        </div>
+      </div>
+    </div>
+    <div id="infortuni-kpi" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;"></div>
+  </div>
+
+  <div class="alert" style="margin-bottom:16px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);color:#34d399">
+    🍼 <strong>NOTA IMPORTANTE — Congedo di Maternità/Paternità:</strong>
+    Il congedo di maternità/paternità è un <strong>diritto del lavoratore garantito dalla legge (D.Lgs. 151/2001)</strong>, <strong>NON è assenteismo</strong>.
+    Le ore di congedo mostrate nelle card sottostanti sono indicate separatamente a scopo informativo e non vengono incluse in nessun calcolo di tasso di assenteismo.
+    Qualsiasi centro di costo che mostra 0 ore di maternità significa semplicemente che nessun dipendente è attualmente in congedo.
+  </div>
+
+  <!-- MALATTIA CARDS PER CDC -->
+  <div class="section-title">📊 Tasso Assenza per CdC — Storico (tutte le cause)</div>
+  <div class="mal-grid" id="mal-grid"></div>
+
+  <!-- ASSENTEISMO DETTAGLIO TABLE -->
+  <div class="section-title">🩺 Dettaglio Vero Assenteismo — Totale Cooperativa (storico)</div>
+  <div class="card-wrap" style="margin-bottom:24px">
+    <div class="ass-row header">
+      <div>Tipo Assenza</div>
+      <div class="ass-num">Ore Totali</div>
+      <div class="ass-num">Ore Retrib.</div>
+      <div class="ass-num">% / Tot</div>
+    </div>
+    <div id="ass-table-body"></div>
+  </div>
+
+  <!-- HR TABLE -->
+  <div class="section-title">👥 Riepilogo HR per Centro di Costo</div>
+  <div class="card-wrap">
+    <div class="hr-row header">
+      <div>Centro</div>
+      <div class="hr-num">Totale</div>
+      <div class="hr-num">Assunti</div>
+      <div class="hr-num">Cessati</div>
+      <div class="hr-num">TI</div>
+      <div class="hr-num">TD</div>
+      <div class="hr-num">PT</div>
+      <div class="hr-num">App.</div>
+      <div>Contratti mix</div>
+    </div>
+    <div id="hr-table-body"></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       COMPOSIZIONE COSTO DEL LAVORO — SEZIONE AGGIUNTIVA
+       Fonte: Zoho "Ripartizione costo del personale CAS"
+       ═══════════════════════════════════════════════════ -->
+  <div class="section-title" style="margin-top:28px">💶 Composizione Costo del Lavoro — Incidenza Maggiorazioni</div>
+
+  <!-- KPI costo lavoro -->
+  <div class="kpi-grid" id="kpi-cdl"></div>
+
+  <div class="chart-grid cols-full">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#3b82f6"></span>Composizione % costo personale per CdC (notturno · festivo · reperibilità · straordinario · giustificativi)</div>
+      <div class="chart-wrap" style="height:320px"><canvas id="c-cdl-stacked"></canvas></div>
+    </div>
+  </div>
+
+  <div class="chart-grid cols-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#0f172a"></span>% Maggiorazione Notturna per CdC</div>
+      <div class="chart-wrap" style="height:240px"><canvas id="c-notturno"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#f59e0b"></span>% Festivo + Reperibilità per CdC</div>
+      <div class="chart-wrap" style="height:240px"><canvas id="c-festivo-rep"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Tabella composizione costo del lavoro -->
+  <div class="chart-card" style="overflow-x:auto;margin-top:14px">
+    <table style="width:100%;border-collapse:collapse;font-size:11px" id="t-cdl"></table>
+  </div>
+
+  <div class="alert alert-warn" style="margin-top:16px">
+    ⚠️ <strong>MODENA:</strong> struttura CAD diffusa — la reperibilità notturna rappresenta il <strong>99.97% della componente reperibilità</strong>
+    (operatori su appartamenti distribuiti). Incidenza giustificativi retribuiti al <strong>39%</strong>: valore anomalo, segnalare alla gestione HR.
+  </div>
+
+  <div class="alert alert-info" style="margin-top:8px">
+    ℹ️ Fonte: Zoho "Ripartizione costo del personale CAS". I valori di incidenza rappresentano la % sul totale costo personale del CdC.
+    Valori marcati <strong style="color:#f87171">in rosso</strong> = sopra media cooperativa per quella voce.
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       TURNOVER REALE — Fonte: Storico Rapporto (Zoho Creator)
+       1.184 contratti dipendenti analizzati — Aprile 2025
+       ═══════════════════════════════════════════════════════ -->
+  <div class="section-title" style="margin-top:32px">🔄 Turnover Reale per CdC — Storico Rapporto (1.184 contratti)</div>
+
+  <!-- KPI Turnover -->
+  <div class="kpi-grid" id="kpi-turnover"></div>
+
+  <!-- Alert insight dinamico -->
+  <div class="alert alert-info" id="turnover-insight" style="margin:12px 0"></div>
+
+  <!-- Chart row: grouped bar + tenure -->
+  <div class="chart-grid cols-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#f59e0b"></span>Turnover % per CdC — Confronto 2022–2025 <span style="font-size:10px;color:var(--text3)">(* 2025 parziale)</span></div>
+      <div class="chart-wrap" style="height:280px"><canvas id="c-turnover-bar"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#06b6d4"></span>Stabilizzazione TD→TI per CdC (% lavoratori con determinato che ottengono indeterminato)</div>
+      <div class="chart-wrap" style="height:280px"><canvas id="c-tenure-bar"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Tabella dettaglio turnover per CdC -->
+  <div class="section-title">📊 Dettaglio Turnover per CdC — Storico Completo</div>
+  <div class="card-wrap" style="overflow-x:auto;margin-bottom:16px" id="t-turnover-wrap"></div>
+
+  <!-- Note metodologiche + interpretazioni -->
+  <div class="alert alert-warn" style="margin-top:8px">
+    🔍 <strong>Interpretazioni chiave — personale consolidato (TI + TD rinnovato; escl. TD_PRIMO scaduti ~28/anno)</strong>
+    <br>• <strong>MODENA</strong>: turnover stabile intorno al 30-37% — fisiologico per un centro con 59 dipendenti e molti TD. Nessun segnale di crisi.
+    <br>• <strong>RIETI 2025: 40%</strong> — 4 persone consolidate uscite su organico di 8-9. Priorità: verifica cause e rafforzamento retention.
+    <br>• <strong>VICENZA</strong>: 2023-2024 elevato (57-52%) poi 0% in 2025 → il personale rinnovato/TI è ora stabile. Alta stabilizzazione TD→TI (57.7%).
+    <br>• <strong>PISA</strong>: 78.3% in 2024 (centro in forte espansione) → calo netto a 5.1% in 2025 → stabilizzazione completata.
+    <br>• <strong>LORANZÈ</strong>: 15.4% (2024) → 23.5% (2025) — lieve aumento da monitorare (organico piccolo: 1-2 uscite impattano molto).
+    <br>• <strong>DROSSO / VICO</strong>: turnover personale consolidato quasi azzerato (0% e 6.7% in 2025) — strutture stabili.
+    <br>• <strong>RIETI</strong>: centro più stabile della cooperativa (35% 2025, tenure 124 gg) → modello di riferimento per le pratiche HR.
+  </div>
+  <div class="alert alert-info" style="margin-top:8px">
+    ℹ️ <strong>Metodologia v4 — Solo TI:</strong> Turnover = Cessati_TI_anno ÷ ((Organico_TI_inizio + Organico_TI_fine) / 2) × 100.
+    Contano solo le uscite da contratto <strong>Tempo Indeterminato</strong>. Tutti i TD (primo e proroga) sono esclusi indipendentemente da rinnovi — la scadenza di un TD non è turnover organizzativo.
+    Fonte: Storico Rapporto Zoho Creator — 1.184 record, 225 persone con TI. Il 2025 è parziale (export Aprile 2025).
+  </div>
+
+</div><!-- /main -->
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<script src="shared/data.js?v=20260525-1800"></script>
+<script src="shared/filters.js?v=20260525-1800"></script>
+<script src="shared/hr_data.js?v=20260525-1800"></script>
+<script src="shared/live.js?v=20260525-1800"></script>
+<script src="shared/nav.js?v=20260525-1800"></script>
+<script>
+// ── helpers ──────────────────────────────────────────────
+function getAnno(){ return parseInt(document.getElementById('f-anno')?.value||2025); }
+function getMese(){ return document.getElementById('f-mese')?.value||'all'; }
+function getCdc(){  return document.getElementById('f-cdc')?.value||'all'; }
+
+const MESI_FULL_HR = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                      'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+
+// Fattore di scala: 1 = tutto l'anno, 1/12 = mese singolo
+function getScale(){ return getMese()==='all' ? 1 : 1/12; }
+function getPeriodLabel(){
+  const m = getMese(), a = getAnno();
+  return m==='all' ? `Anno ${a}` : `${MESI_FULL_HR[parseInt(m)]} ${a}`;
+}
+function isMonthly(){ return getMese()!=='all'; }
+
+function filteredKeys(){
+  const cdc = getCdc();
+  return cdc==='all' ? DA.CDC_KEYS : [cdc];
+}
+
+// ── KPI ──────────────────────────────────────────────────
+function renderKpi(){
+  const keys  = filteredKeys();
+  const sc    = getScale();
+  const per   = getPeriodLabel();
+  const totDip   = keys.reduce((s,k)=>s+(DA.HR_CDC[k]?.tot||0),0);
+  const totAss   = keys.reduce((s,k)=>s+(DA.HR_CDC[k]?.assunti||0),0);
+  const totCes   = keys.reduce((s,k)=>s+(DA.HR_CDC[k]?.cessati||0),0);
+  const avgMal   = DA.avg(keys.map(k=>DA.MALATTIA_CDC[k]?.pct_assenza_tot||0));
+  const oreRet   = Math.round((DA.ASSENTEISMO_VERO||[]).reduce((s,t)=>s+t.ore_ret,0) * sc);
+  const oreMal   = Math.round(((DA.ASSENTEISMO_VERO||[]).find(t=>t.codice==='MA')?.ore||0) * sc);
+  const turnKeys = keys.filter(k=>DA.TURNOVER[k]?.[2024]!=null);
+  const turnover = turnKeys.length ? DA.avg(turnKeys.map(k=>DA.TURNOVER[k][2024])).toFixed(0) : '–';
+
+  const periodoLabel = isMonthly() ? `${per} (stima)` : per;
+  // Maternità totale cooperativa — NON è assenteismo, mostrata separatamente
+  const totMaternita = keys.reduce((s,k)=>s+(DA.MALATTIA_CDC[k]?.ore_maternita||0),0);
+  const cdcMaternita = keys.filter(k=>(DA.MALATTIA_CDC[k]?.ore_maternita||0)>0).length;
+  const kpis = [
+    {icon:'👥', val:DA.fmt(totDip),         label:'Organico Totale',                 col:'kpi-blue'},
+    {icon:'🟢', val:'+'+DA.fmt(totAss),     label:`Assunti ${per}`,                  col:'kpi-green'},
+    {icon:'🔴', val:'-'+DA.fmt(totCes),     label:`Cessati ${per}`,                  col:'kpi-red'},
+    {icon:'🔄', val:turnover+'%',           label:'Turnover Rate (TI)',               col:'kpi-amber'},
+    {icon:'🩺', val:avgMal.toFixed(1)+'%', label:'Tasso Assenza (esclusa maternità)', col:'kpi-pink'},
+    {icon:'⏱️', val:DA.fmtK(oreMal),       label:`Ore Malattia MA — storico`,        col:'kpi-violet'},
+    {icon:'💰', val:DA.fmtK(oreRet),       label:`Ore Ret. Vero Assenteismo`,        col:'kpi-cyan'},
+    {icon:'🍼', val:DA.fmtK(totMaternita), label:`Congedo Mat./Pat. — ${cdcMaternita} CdC — DIRITTO, non assenteismo`, col:'kpi-green'},
+  ];
+
+  document.getElementById('kpi-hr').innerHTML = kpis.map(k=>`
+    <div class="kpi-card ${k.col}">
+      <div class="kpi-icon">${k.icon}</div>
+      <div class="kpi-val">${k.val}</div>
+      <div class="kpi-label">${k.label}</div>
+    </div>`).join('');
+}
+
+// ── CHART: % malattia per CdC ─────────────────────────────
+function renderMalattiaBar(){
+  const cdc=getCdc(); const keys = cdc==='all' ? DA.CDC_KEYS : DA.CDC_KEYS.filter(k=>k===cdc);
+  const vals  = keys.map(k=>DA.MALATTIA_CDC[k]?.pct_assenza||0);
+  const colors= vals.map(v=>v<5?'#10b981':v<10?'#f59e0b':v<15?'#f97316':'#ef4444');
+  DA.mkChart('c-malattia-bar',{
+    type:'bar',
+    data:{
+      labels:keys.map(k=>DA.CDC[k]?.label||k),
+      datasets:[{
+        label:'% Assenza Malattia',
+        data:vals,
+        backgroundColor:colors,
+        borderRadius:5, barThickness:28,
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>c.parsed.y.toFixed(2)+'%'}}},
+      scales:{
+        x:{grid:{display:false}},
+        y:{
+          beginAtZero:true,
+          ticks:{callback:v=>v+'%'},
+          grid:{color:'rgba(255,255,255,.05)'},
+        }
+      }
+    }
+  });
+}
+
+// ── CHART: trend mensile assunzioni/cessazioni ────────────
+function renderHrTrend(){
+  DA.mkChart('c-hr-trend',{
+    type:'line',
+    data:{
+      labels:DA.MESI_LABEL,
+      datasets:[
+        {
+          label:'Assunti',
+          data:DA.HR_TREND_M.assunti,
+          borderColor:'#3b82f6', backgroundColor:'rgba(59,130,246,.12)',
+          tension:.4, fill:true, pointRadius:4, pointHoverRadius:6,
+        },
+        {
+          label:'Cessati',
+          data:DA.HR_TREND_M.cessati,
+          borderColor:'#ef4444', backgroundColor:'rgba(239,68,68,.08)',
+          tension:.4, fill:true, pointRadius:4, pointHoverRadius:6,
+        }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:true}},
+      scales:{
+        x:{grid:{display:false}},
+        y:{beginAtZero:true, grid:{color:'rgba(255,255,255,.05)'}}
+      }
+    }
+  });
+}
+
+// ── CHART: tipologie contratto per CdC (stacked bar) ─────
+function renderContratti(){
+  const cdc  = getCdc();
+  const keys = cdc==='all' ? DA.CDC_KEYS : [cdc];
+  const labels = keys.map(k=>DA.CDC[k]?.label||k);
+  DA.mkChart('c-contratti',{
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:'Tempo Indeterminato', data:keys.map(k=>DA.HR_CDC[k]?.ti||0),
+          backgroundColor:'rgba(59,130,246,.75)', borderRadius:2},
+        {label:'Tempo Determinato',   data:keys.map(k=>DA.HR_CDC[k]?.td||0),
+          backgroundColor:'rgba(16,185,129,.75)',  borderRadius:2},
+        {label:'Part-time',           data:keys.map(k=>DA.HR_CDC[k]?.pt||0),
+          backgroundColor:'rgba(245,158,11,.75)',  borderRadius:2},
+        {label:'Apprendistato',       data:keys.map(k=>DA.HR_CDC[k]?.app||0),
+          backgroundColor:'rgba(139,92,246,.75)',  borderRadius:2},
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:true, position:'bottom'}},
+      // REFACTOR UX (mag 2026): rimosso stacked per leggibilità.
+      scales:{
+        x:{grid:{display:false}},
+        y:{beginAtZero:true, grid:{color:'rgba(255,255,255,.05)'}}
+      }
+    }
+  });
+}
+
+// ── CHART: VERO assenteismo tipi (MA+MO+MZ+MB+AI) ───────
+function renderAssenteismoTipi(){
+  const sc     = getScale();
+  const per    = getPeriodLabel();
+  const src    = DA.ASSENTEISMO_VERO || [];
+  const sorted = [...src].sort((a,b)=>b.ore-a.ore);
+  const palette = ['#ef4444','#f97316','#f59e0b','#ec4899','#8b5cf6'];
+  const nota = isMonthly() ? ` — ${per} (stima 1/12)` : ` — storico cooperativa`;
+  DA.mkChart('c-assenteismo-tipi',{
+    type:'bar',
+    data:{
+      labels:sorted.map(t=>t.tipo),
+      datasets:[{
+        label:'Ore' + nota,
+        data:sorted.map(t=>Math.round(t.ore*sc)),
+        backgroundColor:palette,
+        borderRadius:4,
+      }]
+    },
+    options:{
+      indexAxis:'y',
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>DA.fmt(c.parsed.x)+' ore'}}},
+      scales:{
+        x:{grid:{color:'rgba(255,255,255,.05)'}, ticks:{callback:v=>DA.fmtK(v)}},
+        y:{grid:{display:false}},
+      }
+    }
+  });
+}
+
+// ── MALATTIA CARDS ────────────────────────────────────────
+function renderMalCards(){
+  const cdc=getCdc(); const keys = cdc==='all' ? DA.CDC_KEYS : DA.CDC_KEYS.filter(k=>k===cdc);
+  const maxPct = Math.max(...keys.map(k=>DA.MALATTIA_CDC[k]?.pct_assenza||0));
+  const html = keys.map(k=>{
+    const d   = DA.MALATTIA_CDC[k]||{};
+    const pct = d.pct_assenza||0;
+    const cls = pct<5?'low':pct<10?'mid':'high';
+    const bar = Math.round(pct/maxPct*100);
+    const barColor = pct<5?'#10b981':pct<10?'#f59e0b':pct<15?'#f97316':'#ef4444';
+    const matOre = d.ore_maternita||0;
+    const matHtml = matOre > 0
+      ? `<span style="color:#34d399;font-size:10px;margin-top:3px;display:block">🍼 Congedo Maternità/Pat.: <strong>${DA.fmt(matOre)}</strong> ore — <em>diritto, NON è assenteismo</em></span>`
+      : `<span style="color:var(--text3);font-size:10px;margin-top:3px;display:block">🍼 Congedo maternità: nessuno in corso</span>`;
+    return `<div class="mal-card">
+      <div class="mal-pct ${cls}">${pct.toFixed(1)}%</div>
+      <div class="mal-info">
+        <div class="mal-cdc">${DA.CDC[k]?.label||k}</div>
+        <div class="mal-sub">
+          🩺 Malattia (MA+MO+MZ): <strong>${d.ore_malattia ? DA.fmt(d.ore_malattia) : '<span style="color:var(--text3);font-style:italic">dati per-CdC in arrivo</span>'}</strong>
+          ${matHtml}
+        </div>
+        <div class="mal-bar"><div class="mal-bar-fill" style="width:${bar}%;background:${barColor}"></div></div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('mal-grid').innerHTML = html;
+}
+
+// ── ASSENTEISMO DETAIL TABLE — solo vero assenteismo ─────
+function renderAssTable(){
+  const sc   = getScale();
+  const nota = isMonthly() ? ` (stima 1/12)` : ` — storico cooperativa`;
+  const src  = DA.ASSENTEISMO_VERO || [];
+  const scaled = src.map(t=>({...t, ore:Math.round(t.ore*sc), ore_ret:Math.round(t.ore_ret*sc)}));
+  const totOre = scaled.reduce((s,t)=>s+t.ore,0);
+  const maxOre = scaled[0]?.ore||1;
+  const colors = ['#ef4444','#f97316','#f59e0b','#ec4899','#8b5cf6'];
+
+  const html = scaled.map((t,i)=>{
+    const pct  = totOre>0 ? (t.ore/totOre*100).toFixed(1) : '0.0';
+    const barW = Math.round(t.ore/maxOre*100);
+    return `<div class="ass-row">
+      <div>
+        <span style="color:${colors[i%colors.length]};font-weight:700">●</span> ${t.tipo}
+        <div class="ass-bar"><div class="ass-bar-fill" style="width:${barW}%;background:${colors[i%colors.length]}"></div></div>
+      </div>
+      <div class="ass-num">${DA.fmt(t.ore)}</div>
+      <div class="ass-num">${DA.fmt(t.ore_ret)}</div>
+      <div class="ass-num">${pct}%</div>
+    </div>`;
+  }).join('');
+
+  const totRet = scaled.reduce((s,t)=>s+t.ore_ret,0);
+  const totHtml = `<div class="ass-row" style="font-weight:700;background:rgba(239,68,68,.08)">
+    <div>TOT. VERO ASSENTEISMO${nota}</div>
+    <div class="ass-num">${DA.fmt(totOre)}</div>
+    <div class="ass-num">${DA.fmt(totRet)}</div>
+    <div class="ass-num">100%</div>
+  </div>`;
+
+  document.getElementById('ass-table-body').innerHTML = html + totHtml;
+}
+
+// ── HR TABLE ─────────────────────────────────────────────
+function renderHrTable(){
+  const cdc  = getCdc();
+  const keys = cdc==='all' ? DA.CDC_KEYS : [cdc];
+  const html = keys.map(k=>{
+    const d = DA.HR_CDC[k]||{};
+    const tot = d.tot||1;
+    const tiP = Math.round((d.ti||0)/tot*100);
+    const tdP = Math.round((d.td||0)/tot*100);
+    const ptP = Math.round((d.pt||0)/tot*100);
+    const apP = Math.round((d.app||0)/tot*100);
+    const turnover = ((d.cessati||0)/tot*100).toFixed(0);
+    const tdot = tiP+tdP+ptP+apP;
+    // bar widths normalised
+    const tiW = tiP, tdW = tdP, ptW = ptP, apW = Math.max(apP,1);
+    return `<div class="hr-row">
+      <div>
+        <span class="pill ${DA.CDC[k]?.pill||''}">${DA.CDC[k]?.label||k}</span>
+      </div>
+      <div class="hr-num">${d.tot||0}</div>
+      <div class="hr-num" style="color:#10b981">+${d.assunti||0}</div>
+      <div class="hr-num" style="color:#ef4444">-${d.cessati||0}</div>
+      <div class="hr-num">${d.ti||0}</div>
+      <div class="hr-num">${d.td||0}</div>
+      <div class="hr-num">${d.pt||0}</div>
+      <div class="hr-num">${d.app||0}</div>
+      <div>
+        <div class="hr-bar-wrap">
+          <div class="hr-seg" style="width:${tiW}%;background:#3b82f6" title="TI ${tiP}%"></div>
+          <div class="hr-seg" style="width:${tdW}%;background:#10b981" title="TD ${tdP}%"></div>
+          <div class="hr-seg" style="width:${ptW}%;background:#f59e0b" title="PT ${ptP}%"></div>
+          <div class="hr-seg" style="width:${Math.min(apW,100-tiW-tdW-ptW)}%;background:#8b5cf6" title="App ${apP}%"></div>
+        </div>
+        <div style="font-size:9px;color:var(--text3);margin-top:2px">TI ${tiP}% · TD ${tdP}% · PT ${ptP}% · App ${apP}%</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // totals row — sempre su tutti i CdC (riga TOTALE = aggregato globale)
+  const keys2 = DA.CDC_KEYS;
+  const totDip = keys2.reduce((s,k)=>s+(DA.HR_CDC[k]?.tot||0),0);
+  const totAss = keys2.reduce((s,k)=>s+(DA.HR_CDC[k]?.assunti||0),0);
+  const totCes = keys2.reduce((s,k)=>s+(DA.HR_CDC[k]?.cessati||0),0);
+  const totTI  = keys2.reduce((s,k)=>s+(DA.HR_CDC[k]?.ti||0),0);
+  const totTD  = keys2.reduce((s,k)=>s+(DA.HR_CDC[k]?.td||0),0);
+  const totPT  = keys2.reduce((s,k)=>s+(DA.HR_CDC[k]?.pt||0),0);
+  const totAP  = keys2.reduce((s,k)=>s+(DA.HR_CDC[k]?.app||0),0);
+  const totRow = `<div class="hr-row" style="font-weight:700;background:rgba(59,130,246,.06)">
+    <div>TOTALE</div>
+    <div class="hr-num">${totDip}</div>
+    <div class="hr-num" style="color:#10b981">+${totAss}</div>
+    <div class="hr-num" style="color:#ef4444">-${totCes}</div>
+    <div class="hr-num">${totTI}</div>
+    <div class="hr-num">${totTD}</div>
+    <div class="hr-num">${totPT}</div>
+    <div class="hr-num">${totAP}</div>
+    <div style="font-size:10px;color:var(--text2)">
+      TI ${Math.round(totTI/totDip*100)}% · TD ${Math.round(totTD/totDip*100)}% · PT ${Math.round(totPT/totDip*100)}% · App ${Math.round(totAP/totDip*100)}%
+    </div>
+  </div>`;
+
+  if(cdc==='all'){
+    document.getElementById('hr-table-body').innerHTML = html + totRow;
+  } else {
+    document.getElementById('hr-table-body').innerHTML = html;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// COMPOSIZIONE COSTO DEL LAVORO
+// ═══════════════════════════════════════════════════════════
+
+// CdC con dati reali in HR_ORE_CDC (da Zoho — dinamico)
+function getCdlKeys(){
+  const cdc = getCdc();
+  const available = DA.HR_CDC_AVAILABLE || ['PISA','RIETI','DROSSO','LORANZE','VICENZA','MODENA','VICO'];
+  return cdc === 'all' ? available : available.filter(k=>k===cdc);
+}
+
+// Calcola percentuali composizione CDL per i CdC selezionati e l'anno filtro
+function getCdlPct(){
+  const anno = String(getAnno());
+  const keys = getCdlKeys();
+  return DA.computeCdlPct(keys, [anno]);
+}
+
+function renderKpiCdl(){
+  const keys = getCdlKeys();
+  const pct  = getCdlPct();  // calcolato da Zoho HR_ORE_CDC
+  // Media delle componenti su tutti i CdC disponibili
+  const avg = {};
+  DA.COSTO_LAVORO_KEYS.forEach(key=>{
+    avg[key] = DA.avg(keys.map(k=>(pct[k]||{})[key]||0));
+  });
+  // Trova CdC con più notturno
+  const maxNott = keys.reduce((best,k)=>{
+    const v = (pct[k]||{}).notturno||0;
+    return v > (best.v||0) ? {k,v} : best;
+  },{});
+  const maxFest = keys.reduce((best,k)=>{
+    const v = ((pct[k]||{}).festivo_diurno||0) + ((pct[k]||{}).festivo_notturno||0);
+    return v > (best.v||0) ? {k,v} : best;
+  },{});
+
+  const kpis=[
+    {icon:'🌙',val:avg.notturno.toFixed(1)+'%',         label:'Notturno medio cooperativa',     col:'kpi-blue'},
+    {icon:'📅',val:(avg.festivo_diurno+avg.festivo_notturno).toFixed(1)+'%', label:'Festivo medio', col:'kpi-amber'},
+    {icon:'📞',val:(avg.reperibilita_diurna+avg.reperibilita_notturna).toFixed(1)+'%', label:'Reperibilità media', col:'kpi-violet'},
+    {icon:'🏖️',val:avg.giustificativi.toFixed(1)+'%',  label:'Giustificativi retribuiti medi', col:'kpi-cyan'},
+    {icon:'🔝',val:(DA.CDC[maxNott.k]?.label||maxNott.k), label:'CdC con + notturno',           col:'kpi-pink'},
+    {icon:'📊',val:avg.ordinario.toFixed(1)+'%',         label:'Quota base ordinaria media',    col:'kpi-green'},
+  ];
+  document.getElementById('kpi-cdl').innerHTML=kpis.map(k=>`
+    <div class="kpi-card ${k.col}">
+      <div class="kpi-icon">${k.icon}</div>
+      <div class="kpi-val sm">${k.val}</div>
+      <div class="kpi-label">${k.label}</div>
+    </div>`).join('');
+}
+
+// REFACTOR UX (mag 2026): da stacked bar 100% → heatmap CdC × categoria.
+// Razionale: lo stacked 100% nasconde i singoli segmenti; la heatmap rende ogni
+// % immediatamente confrontabile sia orizzontale (CdC) che verticale (categoria).
+function renderCdlStacked(){
+  const keys = getCdlKeys();
+  const pct  = getCdlPct();
+  const container = document.getElementById('c-cdl-stacked');
+  if (!container) return;
+  // Sostituisci il canvas con div heatmap (idempotente)
+  const parent = container.parentElement;
+  let wrap = document.getElementById('c-cdl-heat');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.id = 'c-cdl-heat';
+    wrap.style.cssText = 'overflow-x:auto;font-size:11px;padding:6px 0;';
+    parent.style.height = 'auto';
+    parent.appendChild(wrap);
+  }
+  // Calcola scala max per shading dinamico
+  const allVals = [];
+  keys.forEach(k => DA.COSTO_LAVORO_KEYS.forEach(c => allVals.push((pct[k]||{})[c]||0)));
+  const maxV = Math.max(...allVals, 1);
+  const cellColor = (v) => {
+    const t = Math.min(v / maxV, 1);
+    // verde→giallo→rosso (HSL)
+    const hue = 140 - 140 * t; // 140=verde, 0=rosso
+    return `hsla(${hue},65%,45%,${0.15 + t*0.55})`;
+  };
+  const labels = DA.COSTO_LAVORO_LABELS;
+  const cols = DA.COSTO_LAVORO_KEYS;
+  const cellW = 78;
+  let html = '<table style="border-collapse:separate;border-spacing:2px;width:100%;font-size:11px;">';
+  // Header categoria
+  html += '<thead><tr>';
+  html += `<th style="text-align:left;padding:4px 8px;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;">Centro</th>`;
+  cols.forEach((c,i)=>{
+    const color = DA.COSTO_LAVORO_COLORS[i];
+    html += `<th style="text-align:center;padding:4px 8px;min-width:${cellW}px;font-size:10px;color:${color};text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid ${color};">${labels[i]}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+  // Righe CdC
+  keys.forEach(k => {
+    const cdcLabel = DA.CDC[k]?.label || k;
+    html += `<tr><td style="padding:6px 8px;font-weight:600;color:var(--text1);font-size:11px;">${cdcLabel}</td>`;
+    cols.forEach((c,i) => {
+      const v = (pct[k]||{})[c] || 0;
+      const bg = cellColor(v);
+      const txt = v > 0 ? v.toFixed(1) + '%' : '—';
+      const fontWeight = v > maxV * 0.5 ? 800 : 600;
+      html += `<td style="background:${bg};padding:6px 8px;text-align:center;border-radius:4px;font-weight:${fontWeight};color:${v>maxV*0.6?'#fff':'var(--text1)'};">${txt}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  // Legenda scala
+  html += `<div style="margin-top:8px;display:flex;align-items:center;gap:8px;font-size:10px;color:var(--text3);">
+    <span>Scala:</span>
+    <div style="height:8px;flex:1;max-width:200px;border-radius:4px;background:linear-gradient(90deg,hsla(140,65%,45%,.15),hsla(70,65%,45%,.4),hsla(0,65%,45%,.7));"></div>
+    <span>0%</span><span style="margin-left:auto;">${maxV.toFixed(0)}%</span>
+  </div>`;
+  wrap.innerHTML = html;
+  // Nascondi il canvas legacy
+  container.style.display = 'none';
+}
+
+function renderNotturno(){
+  const keys = getCdlKeys();
+  const pct  = getCdlPct();
+  const vals = keys.map(k=>(pct[k]||{}).notturno||0);
+  const avg  = DA.avg(vals);
+  DA.mkChart('c-notturno',{type:'bar',
+    data:{labels:keys.map(k=>DA.CDC[k]?.label||k),
+      datasets:[{
+        label:'% Notturno',data:vals,
+        backgroundColor:vals.map(v=>v>avg*1.3?'#ef4444cc':'#0f172acc'),
+        borderColor:vals.map(v=>v>avg*1.3?'#ef4444':'#475569'),
+        borderWidth:1,borderRadius:4,
+      }]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        annotation:{annotations:[{
+          type:'line',yMin:avg,yMax:avg,borderColor:'#f59e0b',borderWidth:1,
+          borderDash:[4,4],label:{content:'Media',display:true}
+        }]}
+      },
+      scales:{y:{title:{display:true,text:'%',color:'#546a87'},min:0}}
+    }
+  });
+}
+
+function renderFestivoRep(){
+  const keys = getCdlKeys();
+  const pct  = getCdlPct();
+  DA.mkChart('c-festivo-rep',{type:'bar',
+    data:{labels:keys.map(k=>DA.CDC[k]?.label||k),
+      datasets:[
+        {label:'Festivo diurno %',
+         data:keys.map(k=>(pct[k]||{}).festivo_diurno||0),
+         backgroundColor:'#f59e0bcc',borderColor:'#f59e0b',borderWidth:1,borderRadius:3,stack:'s'},
+        {label:'Festivo notturno %',
+         data:keys.map(k=>(pct[k]||{}).festivo_notturno||0),
+         backgroundColor:'#d97706cc',borderColor:'#d97706',borderWidth:1,borderRadius:3,stack:'s'},
+        {label:'Rep. notturna %',
+         data:keys.map(k=>(pct[k]||{}).reperibilita_notturna||0),
+         backgroundColor:'#0e7490cc',borderColor:'#0e7490',borderWidth:1,borderRadius:3,stack:'s'},
+        {label:'Rep. diurna %',
+         data:keys.map(k=>(pct[k]||{}).reperibilita_diurna||0),
+         backgroundColor:'#06b6d4cc',borderColor:'#06b6d4',borderWidth:1,borderRadius:3,stack:'s'},
+      ]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'top'}},
+      scales:{x:{stacked:true},y:{stacked:true,title:{display:true,text:'%',color:'#546a87'}}}
+    }
+  });
+}
+
+function renderCdlTable(){
+  const keys = getCdlKeys();
+  const pct  = getCdlPct();
+  const labs = DA.COSTO_LAVORO_LABELS;
+  const kkeys= DA.COSTO_LAVORO_KEYS;
+  // Calcola media per voce
+  const avgs = {};
+  kkeys.forEach(k=>{ avgs[k]=DA.avg(keys.map(ck=>(pct[ck]||{})[k]||0)); });
+
+  const thead=`<thead><tr style="background:var(--surface2)">
+    <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text2)">Centro</th>
+    ${labs.map(l=>`<th style="text-align:right;padding:8px 6px;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text2);white-space:nowrap">${l}</th>`).join('')}
+  </tr></thead>`;
+
+  const rows = keys.map(k=>{
+    const d = pct[k]||{};
+    const cdc=DA.CDC[k];
+    const cells=kkeys.map((key,i)=>{
+      const v=d[key]||0; const avg=avgs[key];
+      const cls=v>avg*1.4?'style="color:#f87171;font-weight:700"':v<avg*0.7?'style="color:#34d399"':'';
+      return `<td style="text-align:right;padding:6px 6px;border-bottom:1px solid var(--border)" ${cls}>${v.toFixed(1)}%</td>`;
+    }).join('');
+    return `<tr>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--border)"><span class="cdc-pill ${cdc?.pill||''}">${cdc?.label||k}</span></td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  const totRow=`<tr style="background:rgba(59,130,246,.06)">
+    <td style="padding:6px 10px;font-weight:700;font-size:11px">Media Coop.</td>
+    ${kkeys.map(k=>`<td style="text-align:right;padding:6px 6px;font-weight:600;font-size:11px">${avgs[k].toFixed(1)}%</td>`).join('')}
+  </tr>`;
+
+  document.getElementById('t-cdl').innerHTML=thead+'<tbody>'+rows+totRow+'</tbody>';
+}
+
+// ═══════════════════════════════════════════════════════════
+// TURNOVER REALE — DA.TURNOVER (Storico Rapporto Zoho Creator)
+// ═══════════════════════════════════════════════════════════
+
+function renderKpiTurnover(){
+  const T  = DA.TURNOVER;
+  const TT = DA.TURNOVER_TOTALE;
+  const keys = DA.CDC_KEYS.filter(k=>T[k]);
+  const keys24 = keys.filter(k=>T[k][2024]!=null);
+  const keys25 = keys.filter(k=>T[k][2025]!=null);
+
+  // CdC con massimo/minimo turnover 2024
+  const maxKey = keys24.reduce((best,k)=>
+    (T[k][2024]||0) > (T[best]?.[2024]||0) ? k : best, keys24[0]);
+  const minKey = keys24.reduce((best,k)=>
+    (T[k][2024]||0) < (T[best]?.[2024]||999) ? k : best, keys24[0]);
+
+  const avg2024 = DA.avg(keys24.map(k=>T[k][2024]));
+  const avg2025 = DA.avg(keys25.map(k=>T[k][2025]));
+  const totOrg  = keys.reduce((s,k)=>s+(T[k].organico_2025||0),0);
+
+  const kpis=[
+    {icon:'📉', val:TT[2024].tov+'%',                          label:'Turnover Cooperativa 2024',                       col:'kpi-amber'},
+    {icon:'🔝', val:(T[maxKey]?.[2024]||0)+'%',                label:'Max 2024 ('+(DA.CDC[maxKey]?.label||maxKey)+')',   col:'kpi-red'},
+    {icon:'✅', val:(T[minKey]?.[2024]||0)+'%',                label:'Min 2024 ('+(DA.CDC[minKey]?.label||minKey)+')',   col:'kpi-green'},
+    {icon:'📊', val:TT[2025].tov+'%',                          label:'Turnover Cooperativa 2025*',                      col:'kpi-blue'},
+    {icon:'👥', val:TT[2025].fine,                             label:'Organico Fine 2025 (dipendenti)',                  col:'kpi-violet'},
+    {icon:'👋', val:TT[2024].cessati,                          label:'Cessati 2024 (persone)',                          col:'kpi-cyan'},
+  ];
+  document.getElementById('kpi-turnover').innerHTML = kpis.map(k=>`
+    <div class="kpi-card ${k.col}">
+      <div class="kpi-icon">${k.icon}</div>
+      <div class="kpi-val">${k.val}</div>
+      <div class="kpi-label">${k.label}</div>
+    </div>`).join('');
+
+  // Insight dinamico 2024→2025
+  const delta = Math.round(TT[2025].tov - TT[2024].tov);
+  const sign  = delta >= 0 ? '+' : '';
+  const isDown= delta < 0;
+  const cls   = isDown ? 'alert-info' : 'alert-warn';
+  const msg   = isDown
+    ? `📉 <strong>Tendenza positiva:</strong> il turnover cooperativa 2025 (${TT[2025].tov}%) è in calo rispetto al 2024 (${TT[2024].tov}%) — Δ ${sign}${delta}pp. Dati persona-level deduplificati (escl. P.IVA/Volontari).`
+    : `⚠️ <strong>Attenzione:</strong> il turnover 2025 (${TT[2025].tov}%) rimane elevato rispetto al 2024 (${TT[2024].tov}%) — Δ ${sign}${delta}pp. Priorità HR: analisi cause cessazioni e azioni retention.`;
+  const el = document.getElementById('turnover-insight');
+  if(el){ el.className='alert '+cls; el.innerHTML=msg; }
+}
+
+function renderTurnoverBar(){
+  const T = DA.TURNOVER;
+  const keys   = DA.CDC_KEYS.filter(k=>T[k]);
+  const labels = keys.map(k=>DA.CDC[k]?.label||k);
+  const years  = [2022,2023,2024,2025];
+  const yColors= ['rgba(99,102,241,.75)','rgba(245,158,11,.75)','rgba(239,68,68,.8)','rgba(16,185,129,.75)'];
+  const datasets = years.map((y,i)=>({
+    label: y===2025 ? '2025*' : String(y),
+    data:  keys.map(k=>T[k]?.[y]??null),
+    backgroundColor: yColors[i],
+    borderWidth:1, borderRadius:3,
+  }));
+  DA.mkChart('c-turnover-bar',{
+    type:'bar',
+    data:{ labels, datasets },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:true, position:'bottom'},
+        tooltip:{callbacks:{label:c=>c.dataset.label+': '+(c.parsed.y!=null?c.parsed.y.toFixed(1)+'%':'N/D — centro non ancora aperto')}}
+      },
+      scales:{
+        x:{grid:{display:false}},
+        y:{
+          beginAtZero:true,
+          ticks:{callback:v=>v+'%'},
+          grid:{color:'rgba(255,255,255,.05)'},
+          title:{display:true,text:'Turnover % (solo TI — indeterminato)',color:'#546a87'},
+        }
+      }
+    }
+  });
+}
+
+function renderTenureBar(){
+  // Stabilizzazione TD→TI (nuova metrica con dati reali)
+  const S = DA.STABILIZZAZIONE_TD_TI;
+  if(!S){ return; }
+  const keys = DA.CDC_KEYS.filter(k=>S[k] && S[k].had_td>0);
+  const vals = keys.map(k=>S[k].tasso);
+  const avg  = DA.avg(vals);
+  const colors = vals.map(v=>v>=avg*1.3?'rgba(16,185,129,.75)':v<=avg*0.7?'rgba(239,68,68,.75)':'rgba(59,130,246,.75)');
+  DA.mkChart('c-tenure-bar',{
+    type:'bar',
+    data:{
+      labels: keys.map(k=>DA.CDC[k]?.label||k),
+      datasets:[{
+        label:'Tasso stabilizzazione TD→TI (%)',
+        data:  vals,
+        backgroundColor: colors,
+        borderWidth:1, borderRadius:4,
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:c=>{
+          const k=keys[c.dataIndex];
+          const d=S[k];
+          return `${c.parsed.y.toFixed(1)}% — ${d.got_ti}/${d.had_td} dipendenti stabilizzati`;
+        }}}
+      },
+      scales:{
+        x:{grid:{display:false}},
+        y:{
+          beginAtZero:true,
+          max:100,
+          ticks:{callback:v=>v+'%'},
+          grid:{color:'rgba(255,255,255,.05)'},
+          title:{display:true,text:'% TD stabilizzati a TI',color:'#546a87'}
+        },
+      }
+    }
+  });
+}
+
+function renderTurnoverTable(){
+  const T = DA.TURNOVER;
+  const TT= DA.TURNOVER_TOTALE;
+  const S = DA.STABILIZZAZIONE_TD_TI||{};
+  const keys = DA.CDC_KEYS.filter(k=>T[k]);
+  const cs ='padding:6px 10px;border-bottom:1px solid var(--border);text-align:right;font-size:11px;font-variant-numeric:tabular-nums';
+  const csl='padding:6px 10px;border-bottom:1px solid var(--border);font-size:11px';
+  const fmtPct = v => v!=null ? v.toFixed(1)+'%' : '<span style="color:var(--text3)">–</span>';
+  const trend  = (v24,v25)=>{
+    if(v24==null||v25==null) return '<span style="color:var(--text3)">–</span>';
+    if(v25<v24) return `<span style="color:#10b981;font-weight:700">▼${v25.toFixed(1)}%</span>`;
+    if(v25>v24) return `<span style="color:#ef4444;font-weight:700">▲${v25.toFixed(1)}%</span>`;
+    return `<span style="color:#f59e0b">${v25.toFixed(1)}%</span>`;
+  };
+  const thead=`<tr style="background:var(--surface2)">
+    <th style="${csl};font-weight:700;font-size:10px;text-transform:uppercase;color:var(--text2);white-space:nowrap">Centro</th>
+    <th style="${cs};font-weight:700;font-size:10px;text-transform:uppercase;color:var(--text2)">2022</th>
+    <th style="${cs};font-weight:700;font-size:10px;text-transform:uppercase;color:var(--text2)">2023</th>
+    <th style="${cs};font-weight:700;font-size:10px;text-transform:uppercase;color:var(--text2)">2024</th>
+    <th style="${cs};font-weight:700;font-size:10px;text-transform:uppercase;color:var(--text2)">2025* ↕24</th>
+    <th style="${cs};font-weight:700;font-size:10px;text-transform:uppercase;color:var(--text2)">Org. 2025</th>
+    <th style="${cs};font-weight:700;font-size:10px;text-transform:uppercase;color:var(--text2)">TD→TI %</th>
+  </tr>`;
+  const rows = keys.map(k=>{
+    const d=T[k]; const cdc=DA.CDC[k];
+    const t24=d[2024];
+    const bg=t24!=null&&t24>=200?'background:rgba(239,68,68,.08)':t24!=null&&t24>=100?'background:rgba(245,158,11,.05)':'';
+    const stab = S[k] ? S[k].tasso.toFixed(1)+'%' : '<span style="color:var(--text3)">–</span>';
+    return `<tr style="${bg}">
+      <td style="${csl}"><span class="pill ${cdc?.pill||''}">${cdc?.label||k}</span></td>
+      <td style="${cs}">${fmtPct(d[2022])}</td>
+      <td style="${cs}">${fmtPct(d[2023])}</td>
+      <td style="${cs}"><strong>${fmtPct(d[2024])}</strong></td>
+      <td style="${cs}">${trend(d[2024],d[2025])}</td>
+      <td style="${cs};font-weight:700">${d.organico_2025!=null?d.organico_2025:'–'}</td>
+      <td style="${cs};color:#06b6d4">${stab}</td>
+    </tr>`;
+  }).join('');
+  // riga totale cooperativa
+  const totOrg = keys.reduce((s,k)=>s+(T[k].organico_2025||0),0);
+  const stabCoop = (function(){
+    const allTD = Object.values(S).reduce((s,v)=>s+v.had_td,0);
+    const allTI = Object.values(S).reduce((s,v)=>s+v.got_ti,0);
+    return allTD>0?(allTI/allTD*100).toFixed(1)+'%':'–';
+  })();
+  const totRow = `<tr style="background:rgba(59,130,246,.06);font-weight:700">
+    <td style="${csl}">TOTALE COOPERATIVA</td>
+    <td style="${cs}">${TT[2022].tov}%</td>
+    <td style="${cs}">${TT[2023].tov}%</td>
+    <td style="${cs}">${TT[2024].tov}%</td>
+    <td style="${cs}">${TT[2025].tov<TT[2024].tov?'<span style="color:#10b981">▼':'<span style="color:#ef4444">▲'}${TT[2025].tov}%</span></td>
+    <td style="${cs}">${totOrg}</td>
+    <td style="${cs};color:#06b6d4">${stabCoop}</td>
+  </tr>`;
+  const wrap = document.getElementById('t-turnover-wrap');
+  if(wrap) wrap.innerHTML=`<table style="width:100%;border-collapse:collapse"><thead>${thead}</thead><tbody>${rows+totRow}</tbody></table>`;
+}
+
+// ── MAIN RENDER ───────────────────────────────────────────
+function renderAll(){
+  renderKpi();
+  renderMalattiaBar();
+  renderHrTrend();
+  renderContratti();
+  renderAssenteismoTipi();
+  renderMalCards();
+  renderAssTable();
+  renderHrTable();
+  renderKpiCdl();
+  renderCdlStacked();
+  renderNotturno();
+  renderFestivoRep();
+  renderCdlTable();
+  // Turnover reale (Storico Rapporto)
+  renderKpiTurnover();
+  renderTurnoverBar();
+  renderTenureBar();
+  renderTurnoverTable();
+}
+
+// ─── 🚑 Infortuni INAIL — popola callout da DA.ASSENTEISMO_TIPI ───────────
+function renderInfortuni() {
+  const kpi = document.getElementById('infortuni-kpi');
+  if (!kpi || !window.DA?.ASSENTEISMO_TIPI) return;
+  const infortuni = DA.ASSENTEISMO_TIPI.find(t => t.cat === 'infortuni');
+  if (!infortuni) {
+    kpi.innerHTML = '<div style="grid-column:1/-1;color:var(--text3);font-size:11px;">— nessun dato infortuni —</div>';
+    return;
+  }
+  // Calcolo ore programmate totali (per il tasso)
+  const totProgrammate = DA.ASSENTEISMO_TIPI.reduce((a,t)=>a+(t.ore_ret||0), 0)
+                       + DA.ASSENTEISMO_VERO.reduce((a,t)=>a+(t.ore_ret||0), 0);
+  const tassoInfortuni = totProgrammate > 0 ? (infortuni.ore / totProgrammate * 100) : 0;
+  const items = [
+    { ico:'🚑', val: DA.fmt(infortuni.ore), lbl:'ORE INFORTUNI 2025', sub:'durata totale', color:'#ea580c' },
+    { ico:'💸', val: DA.fmt(infortuni.ore_ret), lbl:'ORE RETRIBUITE INPS', sub:'a carico ente', color:'#f59e0b' },
+    { ico:'📊', val: tassoInfortuni.toFixed(2)+'%', lbl:'INCIDENZA SU PROGRAMMATE', sub:'ore inf. / ore programmate', color:'#dc2626' },
+    { ico:'ℹ️', val:'INAIL', lbl:'CATEGORIA',  sub:'non assenteismo', color:'#94a3b8' },
+  ];
+  kpi.innerHTML = items.map(k=>`
+    <div style="background:rgba(15,23,42,.5);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:10px 12px;border-left:3px solid ${k.color};">
+      <div style="font-size:16px;">${k.ico}</div>
+      <div style="font-size:20px;font-weight:800;color:var(--text1);line-height:1.2;margin-top:2px;">${k.val}</div>
+      <div style="font-size:9.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;">${k.lbl}</div>
+      <div style="font-size:10px;color:var(--text2);margin-top:3px;">${k.sub}</div>
+    </div>
+  `).join('');
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  DA.chartDefaults(Chart);
+  renderAll();
+  renderInfortuni();
+});
+</script>
+</body>
+</html>

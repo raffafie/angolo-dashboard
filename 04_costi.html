@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="athena-static-only" content="true"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Costi — Dashboard Analytics</title>
+<link rel="stylesheet" href="shared/style.css?v=20260525-1800">
+</head>
+<body data-page="costi">
+<div id="topbar" class="topbar"></div>
+<div id="data-mode-bar" class="data-bar static mb-16"><span class="dot"></span>Caricamento dati...</div>
+
+<div class="main">
+
+  <div class="page-header">
+    <h1><span class="icon">🧾</span> Composizione Costi</h1>
+    <p>Breakdown per categoria, prodie costo, costi orari per mansione — Dati reali Zoho Analytics 2025</p>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="filters">
+    <label>Anno:</label>
+    <select id="f-anno" onchange="renderAll()">
+      <option value="2025" selected>2025 (consuntivo)</option>
+      <option value="2026">2026 (Gen-Feb reale + forecast)</option>
+    </select>
+    <label>Centro:</label>
+    <select id="f-cdc" onchange="renderAll()">
+      <option value="all">Tutti</option>
+      <option value="PISA">CAS PISA</option>
+      <option value="RIETI">CAD RIETI</option>
+      <option value="DROSSO">DROSSO</option>
+      <option value="LORANZE">LORANZÈ</option>
+      <option value="VICENZA">VICENZA</option>
+      <option value="MODENA">MODENA IMMIGRAZIONE</option>
+      <option value="VICO">VICO-VALCHIUSA</option>
+      <option value="CAMBO">CAMPOBASSO</option>
+    </select>
+    <button class="btn-apply" onclick="renderAll()">↻ Aggiorna</button>
+  </div>
+  <div class="alert alert-info" style="margin-bottom:12px;font-size:11px">
+    ℹ️ I dati di composizione costi sono aggregati annuali 2025 — il filtro mese non è applicabile a questo breakdown.
+  </div>
+
+  <!-- KPI -->
+  <div class="kpi-grid" id="kpi-costi"></div>
+
+  <!-- ❶ TREEMAP: composizione costo cooperativa (vista d'insieme) -->
+  <div class="chart-card" style="margin-bottom:14px">
+    <div class="chart-title">
+      <span class="dot" style="background:#8b5cf6"></span>
+      Treemap costi cooperativa — totale per categoria (area ∝ €)
+      <span style="margin-left:auto;font-size:10px;color:var(--text3);font-weight:400">click categoria per dettaglio CdC</span>
+    </div>
+    <div id="treemap-costi" style="display:grid;grid-template-columns:repeat(6,1fr);gap:3px;height:240px"></div>
+  </div>
+
+  <!-- ❷ TORNADO: scostamento € totale per CdC -->
+  <div class="chart-card" style="margin-bottom:14px">
+    <div class="chart-title">
+      <span class="dot" style="background:#ef4444"></span>
+      Scostamento annuale Reale vs Capitolato (€ totali) — ordinato
+      <span style="margin-left:auto;font-size:10px;color:var(--text3);font-weight:400">
+        🔴 over-spending · 🟢 saving rispetto al capitolato
+      </span>
+    </div>
+    <div class="chart-wrap" style="height:260px"><canvas id="c-tornado"></canvas></div>
+  </div>
+
+  <!-- Aerogrammi €/prodie per CdC -->
+  <div class="section-title">🥧 Composizione costo sulla prodie — €/presenza per categoria vs retta Prefettura</div>
+  <div class="alert alert-info" style="margin-bottom:10px;font-size:11px">
+    ℹ️ Ogni spicchio mostra quanto incide quella categoria di costo su ogni giornata di presenza. La linea rossa è la retta riconosciuta dalla Prefettura.
+  </div>
+  <div id="aerogrammi-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-bottom:16px"></div>
+
+  <div class="chart-grid cols-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#8b5cf6"></span>Struttura costi — peso % categorie (tot. Cooperativa)</div>
+      <div class="chart-wrap" style="height:280px"><canvas id="c-cat-pie"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#f59e0b"></span>Prodie costo per CdC (€/presenza) — dato Zoho</div>
+      <div class="chart-wrap" style="height:280px"><canvas id="c-prodie-bar"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ══ CONFRONTO CAPITOLATO vs REALE €/prodie ══ -->
+  <hr class="section-divider">
+  <div class="section-title">⚖️ Confronto Capitolato vs Reale — €/prodie per categoria</div>
+  <div class="alert alert-info" style="margin-bottom:8px;font-size:11px">
+    ℹ️ Il <strong>capitolato</strong> (DM Ministero Interno) definisce la ripartizione % della retta per categoria di spesa — vale per <strong>CC e SUA/CAD</strong>.
+    In <span style="color:#ef4444">rosso</span> le categorie dove il costo reale supera il budget. Centri marcati <strong>⊘</strong> non sono soggetti all'Allegato A (contratto quadro diverso).
+  </div>
+  <div id="alert-cap-esclusi" class="alert alert-warn" style="margin-bottom:8px;font-size:11px;display:none"></div>
+
+  <!-- Scaglioni Allegato A -->
+  <details style="margin-bottom:12px">
+    <summary style="cursor:pointer;font-size:11px;color:var(--text2);padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px">
+      📋 Scaglioni Allegato A — Ore di servizio minime per numero di ospiti (CC vs SUA/CAD)
+    </summary>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px">
+      <div class="chart-card" style="padding:12px">
+        <div style="font-weight:700;font-size:11px;color:#3b82f6;margin-bottom:8px">🏢 Centri Collettivi (CC) — Allegato A CC</div>
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <tr style="color:var(--text2);font-size:10px"><th style="text-align:left;padding:3px 6px">Ospiti</th><th style="text-align:right;padding:3px 6px">Ore/giorno</th><th style="text-align:right;padding:3px 6px">Ore/mese</th></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:3px 6px">1–10</td><td style="text-align:right;padding:3px 6px">8</td><td style="text-align:right;padding:3px 6px;color:var(--text2)">~240</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:3px 6px">11–20</td><td style="text-align:right;padding:3px 6px">16</td><td style="text-align:right;padding:3px 6px;color:var(--text2)">~480</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:3px 6px">21–40</td><td style="text-align:right;padding:3px 6px">24</td><td style="text-align:right;padding:3px 6px;color:var(--text2)">~720</td></tr>
+          <tr style="border-top:1px solid var(--border);background:rgba(59,130,246,.07)"><td style="padding:3px 6px"><strong>41–50</strong> <span style="color:#06b6d4;font-size:9px">MODENA</span></td><td style="text-align:right;padding:3px 6px"><strong>32</strong></td><td style="text-align:right;padding:3px 6px;color:var(--text2)">~960</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:3px 6px">51–60</td><td style="text-align:right;padding:3px 6px">40</td><td style="text-align:right;padding:3px 6px;color:var(--text2)">~1200</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:3px 6px">61–75</td><td style="text-align:right;padding:3px 6px">48</td><td style="text-align:right;padding:3px 6px;color:var(--text2)">~1440</td></tr>
+          <tr style="border-top:1px solid var(--border);background:rgba(59,130,246,.07)"><td style="padding:3px 6px"><strong>76+</strong> <span style="color:#f59e0b;font-size:9px">PISA · LORANZÈ · CAMBO</span></td><td style="text-align:right;padding:3px 6px"><strong>56</strong></td><td style="text-align:right;padding:3px 6px;color:var(--text2)">~1680</td></tr>
+        </table>
+        <div style="font-size:10px;color:var(--text3);margin-top:6px">Posti max: PISA 250 · LORANZÈ 90 · CAMBO 100 · MODENA 50</div>
+      </div>
+      <div class="chart-card" style="padding:12px">
+        <div style="font-weight:700;font-size:11px;color:#10b981;margin-bottom:8px">🏠 SUA/CAD — Allegato A CAD</div>
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <tr style="color:var(--text2);font-size:10px"><th style="text-align:left;padding:3px 6px">Ospiti</th><th style="text-align:right;padding:3px 6px">Ore/giorno</th><th style="text-align:right;padding:3px 6px">Ore/mese</th></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:3px 6px">1–5</td><td style="text-align:right;padding:3px 6px">4</td><td style="text-align:right;padding:3px 6px;color:var(--text2)">~120</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:3px 6px">6–10</td><td style="text-align:right;padding:3px 6px">8</td><td style="text-align:right;padding:3px 6px;color:var(--text2)">~240</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:3px 6px">11–15</td><td style="text-align:right;padding:3px 6px">12</td><td style="text-align:right;padding:3px 6px;color:var(--text2)">~360</td></tr>
+          <tr style="border-top:1px solid var(--border)"><td style="padding:3px 6px">16–20</td><td style="text-align:right;padding:3px 6px">16</td><td style="text-align:right;padding:3px 6px;color:var(--text2)">~480</td></tr>
+          <tr style="border-top:1px solid var(--border);background:rgba(16,185,129,.07)"><td style="padding:3px 6px"><strong>21+</strong> <span style="color:#ec4899;font-size:9px">VICENZA · RIETI</span></td><td style="text-align:right;padding:3px 6px"><strong>20</strong></td><td style="text-align:right;padding:3px 6px;color:var(--text2)">~600</td></tr>
+        </table>
+        <div style="font-size:10px;color:var(--text3);margin-top:6px">VICENZA: 50 posti/rete (1 rete) · RIETI: 50 posti × 2 reti = 100 tot</div>
+        <div style="font-size:10px;color:#64748b;margin-top:4px">⊘ DROSSO e VICO: contratto quadro diverso — non soggetti all'Allegato A</div>
+      </div>
+    </div>
+  </details>
+
+  <div class="chart-grid cols-full">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#8b5cf6"></span>€/prodie Capitolato (atteso) vs Reale (Zoho) — centri soggetti al capitolato (escl. DROSSO e VICO)</div>
+      <div class="chart-wrap" style="height:320px"><canvas id="c-cap-vs-reale"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ══ MARGINE PER CDC ══ -->
+  <div class="section-title">💹 Margine per CdC — Retta Prefettura vs Costo Reale/prodie</div>
+  <div class="alert alert-info" style="margin-bottom:10px;font-size:11px">
+    ℹ️ Centri [CC] = Collettivi (capitolato CC con scaglioni) · [SUA]/[CAD] = Struttura Unità Abitative / Centro Accoglienza Diffuso (capitolato SUA/CAD).
+    <strong>⊘</strong> = non soggetto al capitolato Allegato A (contratto quadro diverso). Centri senza dati prodie = inaugurazione recente o dati non in Zoho.
+  </div>
+  <div class="chart-grid cols-full">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#10b981"></span>Retta Prefettura vs Costo reale (€/prodie) — tutti i CdC · ⊘ = non soggetto al capitolato</div>
+      <div class="chart-wrap" style="height:280px"><canvas id="c-margine"></canvas></div>
+    </div>
+  </div>
+  <div id="margine-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:16px"></div>
+
+  <!-- Costi orari per CdC -->
+  <div class="chart-grid cols-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#ec4899"></span>Costo orario medio personale per CdC (€/h)</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-ore-h"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#06b6d4"></span>Ore lavorate per CdC — anno 2025</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-ore-lavorate"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ══ COMPOSIZIONE COSTO DEL LAVORO ══ -->
+  <div class="section-title">👔 Composizione Costo del Lavoro per CdC — da Zoho Ripartizione</div>
+  <div class="alert alert-info" style="margin-bottom:10px;font-size:11px">
+    ℹ️ Incidenza % delle diverse componenti retributive sul costo totale del personale. Fonte: Zoho "Ripartizione costo del personale CAS".
+  </div>
+  <div class="chart-grid cols-full">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#3b82f6"></span>Struttura del costo del lavoro — % per tipo retribuzione</div>
+      <div class="chart-wrap" style="height:300px"><canvas id="c-lavoro-stack"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Tabella costi dettaglio -->
+  <div class="section-title">📋 Dettaglio Composizione Costi per CdC (€ 2025)</div>
+  <div class="chart-card">
+    <div style="overflow-x:auto"><table class="data-table" id="t-costi"></table></div>
+  </div>
+
+  <!-- Costi orari per mansione -->
+  <div class="section-title">👤 Costi Orari per Mansione (da Zoho: Costi orari CAS)</div>
+  <div class="chart-grid cols-2">
+    <div class="chart-card" id="card-mansioni-pisa">
+      <div class="chart-title"><span class="dot" style="background:#3b82f6"></span>CAS PISA — €/h per mansione</div>
+      <div class="chart-wrap" style="height:220px"><canvas id="c-mans-pisa"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#8b5cf6"></span>DROSSO — €/h per mansione</div>
+      <div class="chart-wrap" style="height:220px"><canvas id="c-mans-drosso"></canvas></div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<script src="shared/data.js?v=20260525-1800"></script>
+<script src="shared/filters.js?v=20260525-1800"></script>
+<script src="shared/hr_data.js?v=20260525-1800"></script>
+<script src="shared/live.js?v=20260525-1800"></script>
+<script src="shared/nav.js?v=20260525-1800"></script>
+<script>
+const KEYS_COSTI = ['PISA','RIETI','DROSSO','LORANZE','VICENZA','MODENA','VICO','CAMBO'];
+// Calcola DA.COSTO_LAVORO_PCT da hr_data.js (rimosso da data.js)
+DA.COSTO_LAVORO_PCT = (typeof DA.computeCdlPct === 'function')
+  ? DA.computeCdlPct(DA.HR_CDC_AVAILABLE || KEYS_COSTI, ['2025'])
+  : {};
+const CAT_ORDER  = ['PERSONALE','VITTO','STRUTTURA','UTENZE','MANUTENZIONI','CONSULENTI_ESTERNI','PRODOTTI_IGIENE','SPESE_SANITARIE','KIT_VESTITI','COSTI_GENERALI','MEZZI_TRASPORTO'];
+const CAT_LABELS = {
+  PERSONALE:'Personale', VITTO:'Vitto', STRUTTURA:'Struttura',
+  UTENZE:'Utenze', MANUTENZIONI:'Manutenzioni', CONSULENTI_ESTERNI:'Consulenti',
+  PRODOTTI_IGIENE:'Prod. Igiene', SPESE_SANITARIE:'Sp. Sanitarie',
+  KIT_VESTITI:'Kit Vestiti', COSTI_GENERALI:'C. Generali', MEZZI_TRASPORTO:'Mezzi Trasp.'
+};
+const CAT_COLORS = ['#3b82f6','#10b981','#8b5cf6','#f59e0b','#ec4899','#06b6d4','#ef4444','#6366f1','#14b8a6','#f97316','#a855f7'];
+
+function activeCdc(){ return document.getElementById('f-cdc')?.value||'all'; }
+function activeAnno(){ return document.getElementById('f-anno')?.value||'2025'; }
+function getANNO(k){
+  const y = activeAnno();
+  return (y === '2026' ? DA.ANNO2026 : DA.ANNO2025)[k] || {};
+}
+function getKeys(){ const v=activeCdc(); return v==='all'?KEYS_COSTI:[v]; }
+
+function renderKpi(){
+  const keys=getKeys();
+  let tC=0, tP=0, tV=0;
+  keys.forEach(k=>{
+    const d=DA.COSTI_CAT[k]||{};
+    tC+=d.TOTALE||0; tP+=d.PERSONALE||0; tV+=d.VITTO||0;
+  });
+  const avgH=DA.avg(keys.map(k=>DA.COSTI_ORE[k]?.euro_h).filter(v=>v!=null));
+  const totOre=keys.reduce((s,k)=>s+(DA.COSTI_ORE[k]?.ore||0),0);
+  const kpis=[
+    {icon:'🧾',val:'€'+DA.fmtK(tC),     label:'Costi totali 2025',    col:'kpi-amber'},
+    {icon:'👥',val:'€'+DA.fmtK(tP),     label:'Costo personale',      col:'kpi-blue'},
+    {icon:'🍽️',val:'€'+DA.fmtK(tV),    label:'Costo vitto',          col:'kpi-green'},
+    {icon:'⏱️',val:DA.fmtK(totOre),    label:'Ore lavorate totali',  col:'kpi-violet'},
+    {icon:'💶',val:'€'+avgH.toFixed(2), label:'Costo orario medio',   col:'kpi-cyan'},
+    {icon:'📊',val:tC>0?(tP/tC*100).toFixed(0)+'%':'N/D',label:'Incidenza personale',col:'kpi-pink'},
+  ];
+  document.getElementById('kpi-costi').innerHTML=kpis.map(k=>`
+    <div class="kpi-card ${k.col}">
+      <div class="kpi-icon">${k.icon}</div>
+      <div class="kpi-val ${k.val.length>8?'sm':''}">${k.val}</div>
+      <div class="kpi-label">${k.label}</div>
+    </div>`).join('');
+}
+
+function renderCatBar(){
+  const keys=getKeys();
+  const datasets=CAT_ORDER.filter(c=>keys.some(k=>(DA.COSTI_CAT[k]||{})[c]>0)).map((c,i)=>({
+    label:CAT_LABELS[c],
+    data:keys.map(k=>(DA.COSTI_CAT[k]||{})[c]||0),
+    backgroundColor:CAT_COLORS[i]+'cc', borderColor:CAT_COLORS[i], borderWidth:1, borderRadius:2,
+  }));
+  DA.mkChart('c-cat-bar',{type:'bar',
+    data:{labels:keys.map(k=>DA.CDC[k].label), datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top', labels:{font:{size:10}}}},
+      scales:{x:{stacked:true},y:{stacked:true,title:{display:true,text:'€',color:'#546a87'}}}}
+  });
+}
+
+function renderCatPie(){
+  const keys=getKeys();
+  const totByCat=CAT_ORDER.map(c=>keys.reduce((s,k)=>s+((DA.COSTI_CAT[k]||{})[c]||0),0));
+  const nonZero=CAT_ORDER.map((c,i)=>({l:CAT_LABELS[c],v:totByCat[i],color:CAT_COLORS[i]})).filter(x=>x.v>0);
+  DA.mkChart('c-cat-pie',{type:'doughnut',
+    data:{labels:nonZero.map(x=>x.l),
+      datasets:[{data:nonZero.map(x=>x.v),backgroundColor:nonZero.map(x=>x.color+'cc'),borderColor:'#0d1526',borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'55%',
+      plugins:{legend:{position:'right',labels:{font:{size:11}}}}}
+  });
+}
+
+function renderProdie(){
+  const keys=getKeys();
+  DA.mkChart('c-prodie-bar',{type:'bar',
+    data:{labels:keys.map(k=>DA.CDC[k].label),
+      datasets:[{
+        label:'€/presenza',
+        data:keys.map(k=>DA.getAnnoData(parseInt(document.getElementById('f-anno')?.value||2025))[k]?.prodie||0),
+        backgroundColor:keys.map(k=>DA.CDC[k].color+'cc'),
+        borderColor:keys.map(k=>DA.CDC[k].color),
+        borderWidth:1, borderRadius:4,
+      }]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{title:{display:true,text:'€/presenza',color:'#546a87'}}}}
+  });
+}
+
+function renderIncidenza(){
+  const keys = getKeys();
+  const cats  = CAT_ORDER.filter(c => keys.some(k => (DA.COSTI_CAT[k]||{})[c] > 0));
+  const grid  = document.getElementById('aerogrammi-grid');
+  if(!grid) return;
+
+  // Distruggi chart precedenti e svuota griglia
+  if(window._aeroCharts){ window._aeroCharts.forEach(ch=>ch.destroy()); }
+  window._aeroCharts = [];
+  grid.innerHTML = '';
+
+  keys.forEach(k => {
+    const d    = DA.COSTI_CAT[k] || {};
+    const cdc  = DA.CDC[k];
+    const pres = DA.PRESENZE_FINAN[k] || DA.PRESENZE_EST[k] || 1;
+    const retta = DA.RETTE_CDC[k];                  // €/prodie pagata dalla Prefettura
+    const prodietot = d.TOTALE > 0 ? (d.TOTALE / pres) : null;  // costo totale / prodie
+
+    if(!prodietot){ return; }  // skip CdC senza dati (es. MODENA)
+
+    // Calcola €/prodie per categoria — usa solo categorie con costo > 0
+    const items = cats
+      .map((c,i) => ({
+        cat: c,
+        l:   CAT_LABELS[c],
+        v:   d[c]||0,
+        col: CAT_COLORS[i],
+        epr: d[c] > 0 ? (d[c] / pres) : 0   // €/prodie per questa categoria
+      }))
+      .filter(x => x.epr > 0)
+      .sort((a,b) => b.epr - a.epr);
+
+    // Badge margine: costo vs retta
+    const hasMarg = retta != null;
+    const margine = hasMarg ? (retta - prodietot) : null;
+    const margCol  = !hasMarg ? '#94a3b8'
+                   : margine >= 0 ? '#10b981'   // verde = margine positivo
+                   : '#ef4444';                  // rosso = in perdita
+    const margText = !hasMarg ? 'retta n/d'
+                   : (margine >= 0 ? `+€${margine.toFixed(2)} margine` : `−€${Math.abs(margine).toFixed(2)} perdita`);
+
+    // Card
+    const card = document.createElement('div');
+    card.className = 'chart-card';
+    card.style.cssText = 'padding:14px';
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <span class="cdc-pill ${cdc.pill}" style="font-size:10px">${cdc.label}</span>
+        <div style="text-align:right;line-height:1.5">
+          <div style="font-size:13px;font-weight:700;color:var(--text)">€${prodietot.toFixed(2)}<span style="font-size:9px;font-weight:400;color:var(--text3)">/pr costo</span></div>
+          ${hasMarg ? `<div style="font-size:10px;color:var(--text2)">Retta: <strong style="color:#f59e0b">€${retta.toFixed(2)}</strong></div>` : ''}
+          <div style="font-size:10px;font-weight:700;color:${margCol}">${margText}</div>
+        </div>
+      </div>
+      <div style="height:165px;position:relative"><canvas id="c-aero-${k}"></canvas></div>
+      <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:4px 8px">
+        ${items.map(x=>`
+          <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text2)">
+            <span style="flex-shrink:0;width:7px;height:7px;border-radius:50%;background:${x.col}"></span>
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${x.l}</span>
+            <span style="margin-left:auto;font-weight:700;color:var(--text);white-space:nowrap">€${x.epr.toFixed(2)}</span>
+          </div>`).join('')}
+      </div>`;
+    grid.appendChild(card);
+
+    // Doughnut — i dati sono €/prodie per categoria
+    const ch = new Chart(document.getElementById(`c-aero-${k}`), {
+      type: 'doughnut',
+      data: {
+        labels: items.map(x => x.l),
+        datasets: [{
+          data: items.map(x => x.epr),
+          backgroundColor: items.map(x => x.col+'cc'),
+          borderColor: '#0d1526', borderWidth: 2,
+          hoverOffset: 6
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        cutout: '56%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: tt => tt[0].label,
+              label: c => {
+                const item = items[c.dataIndex];
+                const pct  = (item.epr / prodietot * 100).toFixed(1);
+                return [
+                  ` €${item.epr.toFixed(2)}/prodie  (${pct}% del costo)`,
+                  ` € totale: ${DA.fmt(item.v)}`
+                ];
+              }
+            }
+          }
+        }
+      }
+    });
+    window._aeroCharts.push(ch);
+  });
+}
+
+function renderOreH(){
+  const keys=Object.keys(DA.COSTI_ORE);
+  DA.mkChart('c-ore-h',{type:'bar',
+    data:{labels:keys.map(k=>DA.CDC[k]?.label||k),
+      datasets:[{
+        label:'€/h',
+        data:keys.map(k=>DA.COSTI_ORE[k].euro_h),
+        backgroundColor:'#ec4899cc', borderColor:'#ec4899', borderWidth:1, borderRadius:4,
+      }]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{title:{display:true,text:'€/h',color:'#546a87'}}}}
+  });
+}
+
+function renderOreLavorate(){
+  const keys=Object.keys(DA.COSTI_ORE);
+  DA.mkChart('c-ore-lavorate',{type:'bar',
+    data:{labels:keys.map(k=>DA.CDC[k]?.label||k),
+      datasets:[{
+        label:'Ore lavorate',
+        data:keys.map(k=>DA.COSTI_ORE[k].ore),
+        backgroundColor:keys.map(k=>DA.CDC[k]?.color+'cc'||'#3b82f6cc'),
+        borderColor:keys.map(k=>DA.CDC[k]?.color||'#3b82f6'),
+        borderWidth:1, borderRadius:4,
+      }]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{title:{display:true,text:'Ore',color:'#546a87'}}}}
+  });
+}
+
+function renderTable(){
+  const keys=getKeys();
+  const cats=CAT_ORDER.filter(c=>keys.some(k=>(DA.COSTI_CAT[k]||{})[c]>0));
+  const grandTot=keys.reduce((s,k)=>s+((DA.COSTI_CAT[k]||{}).TOTALE||0),0);
+
+  // Presenze per €/prodie
+  const pres = {};
+  keys.forEach(k=>{ pres[k] = DA.PRESENZE_FINAN[k] || DA.PRESENZE_EST[k] || 0; });
+  const hasPres = k => pres[k] > 0;
+
+  // Header: Categoria | CdC1 (€) | CdC1 (€/pr) | CdC2 (€) | CdC2 (€/pr) | ... | Totale | %
+  const thCdc = keys.map(k=>`
+    <th colspan="2" style="text-align:center;border-bottom:1px solid var(--border2)">${DA.CDC[k].label}</th>`).join('');
+  const thSub = keys.map(k=>`
+    <th style="font-size:9px;color:var(--text3)">€ totale</th>
+    <th style="font-size:9px;color:#f59e0b">€/prodie</th>`).join('');
+  const ths=`<thead>
+    <tr><th rowspan="2">Categoria</th>${thCdc}<th rowspan="2">Tot. €</th><th rowspan="2">%</th></tr>
+    <tr>${thSub}</tr>
+  </thead>`;
+
+  const rows=cats.map((c,ci)=>{
+    const vals=keys.map(k=>(DA.COSTI_CAT[k]||{})[c]||0);
+    const tot=vals.reduce((a,b)=>a+b,0);
+    const pct=grandTot>0?(tot/grandTot*100).toFixed(1):0;
+    const cells=keys.map((k,i)=>{
+      const v=vals[i];
+      const epr = hasPres(k) && v>0 ? (v/pres[k]).toFixed(2) : null;
+      return `<td class="num">${v>0?'€'+DA.fmt(v):'-'}</td>
+              <td class="num" style="color:#f59e0b;font-size:11px">${epr?'€'+epr:'-'}</td>`;
+    }).join('');
+    return `<tr>
+      <td><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${CAT_COLORS[ci]};margin-right:5px"></span>${CAT_LABELS[c]}</td>
+      ${cells}
+      <td class="num" style="font-weight:600">€${DA.fmt(tot)}</td>
+      <td class="num">${pct}%</td>
+    </tr>`;
+  }).join('');
+
+  // Riga totale con €/prodie totale per CdC
+  const totCells=keys.map(k=>{
+    const t=(DA.COSTI_CAT[k]||{}).TOTALE||0;
+    const epr=hasPres(k)&&t>0?(t/pres[k]).toFixed(2):null;
+    return `<td class="num" style="font-weight:600">€${DA.fmtK(t)}</td>
+            <td class="num" style="font-weight:700;color:#f59e0b">${epr?'€'+epr:'-'}</td>`;
+  }).join('');
+  // Riga retta prefettura
+  const rettaCells=keys.map(k=>{
+    const r=DA.RETTE_CDC[k];
+    return `<td class="num" style="color:var(--text3)" colspan="2">${r?'€'+r.toFixed(2)+'/pr':'n/d'}</td>`;
+  }).join('');
+
+  const totRow=`<tr style="background:rgba(59,130,246,.06)">
+    <td style="font-weight:700">TOTALE COSTO</td>${totCells}
+    <td class="num" style="font-weight:700">€${DA.fmtK(grandTot)}</td><td class="num">100%</td>
+  </tr>`;
+  const rettaRow=`<tr style="background:rgba(245,158,11,.05);border-top:1px solid rgba(245,158,11,.3)">
+    <td style="font-weight:600;color:#f59e0b;font-size:11px">🏛 Retta Prefettura</td>${rettaCells}
+    <td class="num" style="color:var(--text3)" colspan="2">—</td>
+  </tr>`;
+
+  document.getElementById('t-costi').innerHTML=ths+'<tbody>'+rows+totRow+rettaRow+'</tbody>';
+}
+
+function renderMansioni(){
+  // CAS PISA
+  const pisa=DA.MANSIONI.PISA.filter(m=>m.h>0);
+  DA.mkChart('c-mans-pisa',{type:'bar',
+    data:{labels:pisa.map(m=>m.r.replace(/OPERATORE\/TRICE/,'OCA').replace('ADDETTO/A','ADD.').substring(0,22)),
+      datasets:[{label:'€/h',data:pisa.map(m=>m.eh),backgroundColor:'#3b82f6cc',borderColor:'#3b82f6',borderWidth:1,borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:{font:{size:9}}},y:{title:{display:true,text:'€/h',color:'#546a87'}}},
+      indexAxis:'y'}
+  });
+  // DROSSO
+  const drosso=DA.MANSIONI.DROSSO.filter(m=>m.h>0);
+  DA.mkChart('c-mans-drosso',{type:'bar',
+    data:{labels:drosso.map(m=>m.r.replace(/OPERATORE\/TRICE/,'OCA').replace('ADDETTO/A','ADD.').substring(0,22)),
+      datasets:[{label:'€/h',data:drosso.map(m=>m.eh),backgroundColor:'#8b5cf6cc',borderColor:'#8b5cf6',borderWidth:1,borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:{font:{size:9}}},y:{title:{display:true,text:'€/h',color:'#546a87'}}},
+      indexAxis:'y'}
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// CONFRONTO CAPITOLATO vs REALE €/prodie per categoria
+// ─────────────────────────────────────────────────────────────
+function renderCapVsReale(){
+  // Solo centri soggetti al capitolato (esclude DROSSO e VICO — contratto quadro diverso)
+  const allKeys = getKeys();
+  const keys = allKeys.filter(k => DA.CDC_CAPITOLATO.includes(k) && DA.PRESENZE_FINAN[k] > 0);
+  const nonCap = allKeys.filter(k => DA.CDC_NON_CAPITOLATO[k]);
+
+  // Mostra avviso per CdC esclusi
+  const alertEl = document.getElementById('alert-cap-esclusi');
+  if(alertEl){
+    alertEl.style.display = nonCap.length ? 'block' : 'none';
+    alertEl.innerHTML = nonCap.length
+      ? `ℹ️ Esclusi dal confronto capitolato: ${nonCap.map(k=>`<strong>${DA.CDC[k]?.label||k}</strong> (${DA.CDC_NON_CAPITOLATO[k]})`).join(' · ')}`
+      : '';
+  }
+
+  if(!keys.length){ return; }
+
+  // Categorie con dati e mapping capitolato (DM Ministero Interno — stessi % per CC e SUA/CAD)
+  const CATS_CAP = {
+    PERSONALE:          0.440, VITTO:              0.220,
+    STRUTTURA:          0.120, UTENZE:             0.080,
+    MANUTENZIONI:       0.050, CONSULENTI_ESTERNI: 0.040,
+    PRODOTTI_IGIENE:    0.020, SPESE_SANITARIE:    0.010,
+  };
+  const catKeys   = Object.keys(CATS_CAP);
+  const catLabels = catKeys.map(c => CAT_LABELS[c] || c);
+
+  // Raggruppa CC e CAD per label dataset
+  const ccKeys  = keys.filter(k => DA.CDC[k]?.tipo === 'CC');
+  const cadKeys = keys.filter(k => DA.CDC[k]?.tipo !== 'CC');
+
+  // Media capitolato sui centri selezionati (peso retta reale di ciascun centro)
+  const capData = catKeys.map(c => {
+    const avg = DA.avg(keys.map(k => DA.RETTE_CDC[k] * CATS_CAP[c]));
+    return +avg.toFixed(2);
+  });
+
+  // Media reale su CdC selezionati (solo quelli con dati presenze finanziari)
+  const realeData = catKeys.map(c => {
+    const vals = keys
+      .map(k => {
+        const pres = DA.PRESENZE_FINAN[k]; const v = (DA.COSTI_CAT[k]||{})[c]||0;
+        return pres > 0 ? v/pres : null;
+      })
+      .filter(v => v != null);
+    return vals.length ? +DA.avg(vals).toFixed(2) : 0;
+  });
+
+  // Colori barre reali: rosso se > capitolato, verde se ≤
+  const realeColors  = catKeys.map((c,i) => realeData[i] > capData[i] ? '#ef4444cc' : '#10b981cc');
+  const realeBorders = catKeys.map((c,i) => realeData[i] > capData[i] ? '#ef4444'   : '#10b981');
+
+  // Scaglione info per tooltip
+  const scaglioneInfo = keys.map(k => {
+    const tipo = DA.CDC[k]?.tipo;
+    const osp  = DA.OSPITI_MEDI[k] || 0;
+    if(tipo === 'CC'){
+      const ore = DA.getFasciaOre(osp, 'CC');
+      return `${DA.CDC[k]?.label}: ${osp} osp/g → CC fascia ${ore}h/g`;
+    } else {
+      const ore = DA.getFasciaOre(osp, 'CAD');
+      return `${DA.CDC[k]?.label}: ${osp} osp/g → SUA/CAD ${ore}h/g`;
+    }
+  });
+
+  DA.mkChart('c-cap-vs-reale',{type:'bar',
+    data:{
+      labels: catLabels,
+      datasets:[
+        { label:'Capitolato DM (€/prodie)',
+          data: capData,
+          backgroundColor:'#8b5cf6aa', borderColor:'#8b5cf6',
+          borderWidth:1, borderRadius:3 },
+        { label:`Costo reale (media ${keys.length} CdC con dati)`,
+          data: realeData,
+          backgroundColor: realeColors, borderColor: realeBorders,
+          borderWidth:1, borderRadius:3 },
+      ]
+    },
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'top'},
+        tooltip:{callbacks:{
+          label: ctx => `${ctx.dataset.label}: €${ctx.parsed.y.toFixed(2)}/prodie`,
+          afterBody: (items) => {
+            const i = items[0]?.dataIndex;
+            if(i==null) return [];
+            const diff = realeData[i] - capData[i];
+            const sign = diff >= 0 ? '+' : '';
+            const note = diff > 0 ? '⚠ SOPRA capitolato' : '✓ entro capitolato';
+            return [`Δ vs capitolato: ${sign}€${diff.toFixed(2)}/prodie  ${note}`];
+          }
+        }}
+      },
+      scales:{
+        y:{title:{display:true,text:'€/prodie',color:'#546a87'}, beginAtZero:true},
+        x:{ticks:{font:{size:11}}}
+      }
+    }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// MARGINE PER CDC — Retta vs Costo reale
+// ─────────────────────────────────────────────────────────────
+function renderMargine(){
+  // Tutti i centri con retta definita — separati per capitolato vs non-capitolato
+  const allKeys = DA.CDC_KEYS;
+  const capKeys  = allKeys.filter(k => DA.CDC_CAPITOLATO.includes(k));
+  const ncapKeys = allKeys.filter(k => DA.CDC_NON_CAPITOLATO[k]);
+  // Mostra tutti ma marca diversamente
+  const keys = [...capKeys, ...ncapKeys];
+
+  const rette  = keys.map(k => DA.RETTE_CDC[k] || 0);
+  const costi  = keys.map(k => getANNO(k).prodie || 0);
+  const margini= keys.map((k,i) => costi[i]>0 ? +(rette[i]-costi[i]).toFixed(2) : null);
+  const tipo   = keys.map(k => DA.CDC[k]?.tipo || 'CC');
+
+  // Colore: grigio per centri senza dati prodie, verde/rosso per quelli con dati
+  const costiColors  = costi.map((c,i) => c<=0 ? '#64748baa' : c<=rette[i]?'#10b981aa':'#ef4444aa');
+  const costiBorders = costi.map((c,i) => c<=0 ? '#64748b'   : c<=rette[i]?'#10b981':'#ef4444');
+
+  DA.mkChart('c-margine',{type:'bar',
+    data:{
+      labels: keys.map((k,i) => {
+        const lbl = DA.CDC[k].label;
+        const t   = DA.CDC[k]?.tipo;
+        const ncap = DA.CDC_NON_CAPITOLATO[k];
+        const suffix = ncap ? ' ⊘' : (t==='CC' ? ' [CC]' : ` [${t}]`);
+        return lbl + suffix;
+      }),
+      datasets:[
+        { label:'Retta Prefettura (€/prodie)',
+          data: rette,
+          backgroundColor:'#f59e0baa', borderColor:'#f59e0b', borderWidth:1, borderRadius:3 },
+        { label:'Costo reale (€/prodie)',
+          data: costi.map(c => c>0?c:null),
+          backgroundColor: costiColors, borderColor: costiBorders,
+          borderWidth:1, borderRadius:3 },
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'top'},
+        tooltip:{callbacks:{
+          label:ctx=>`${ctx.dataset.label}: €${ctx.parsed.y!=null?ctx.parsed.y.toFixed(2):'N/D'}/pr`,
+          afterBody:(items)=>{
+            const i=items[0]?.dataIndex;
+            if(i==null) return [];
+            const k=keys[i];
+            const ncap = DA.CDC_NON_CAPITOLATO[k];
+            const m=margini[i];
+            const lines = [];
+            if(ncap) lines.push(`⊘ ${ncap}`);
+            else if(m!=null) lines.push(`Margine: ${m>=0?'+':''}€${m.toFixed(2)}/prodie · Tipo: ${tipo[i]}`);
+            else lines.push('Dati prodie non disponibili (centro nuovo/parziale)');
+            return lines;
+          }
+        }}
+      },
+      scales:{y:{title:{display:true,text:'€/prodie',color:'#546a87'},beginAtZero:false}}
+    }
+  });
+
+  // Cards margine — solo centri con retta definita
+  document.getElementById('margine-cards').innerHTML = keys.map((k,i)=>{
+    const m    = margini[i];
+    const ncap = DA.CDC_NON_CAPITOLATO[k];
+    const col  = ncap ? '#64748b' : m==null ? '#94a3b8' : m>=0 ? '#10b981' : '#ef4444';
+    const border = ncap ? 'rgba(100,116,139,.2)' : m==null ? 'rgba(148,163,184,.2)' : m>=0 ? 'rgba(16,185,129,.3)' : 'rgba(239,68,68,.3)';
+    const badge  = DA.CDC[k]?.tipo ? `<span style="font-size:9px;padding:1px 5px;border-radius:6px;background:rgba(59,130,246,.15);color:#93c5fd">${DA.CDC[k].tipo}</span>` : '';
+    return `<div class="chart-card" style="padding:12px;border-color:${border}">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:10px;color:var(--text3)">${DA.CDC[k].label}</span>
+        ${badge}
+      </div>
+      <div style="font-size:20px;font-weight:800;color:${col}">
+        ${ncap ? '⊘' : m!=null ? (m>=0?'+':'')+m.toFixed(2)+'€' : 'N/D'}
+      </div>
+      <div style="font-size:10px;color:var(--text3)">${ncap ? 'non soggetto capitolato' : 'margine/prodie'}</div>
+      <div style="margin-top:6px;font-size:11px;color:var(--text2)">
+        Retta: <strong style="color:#f59e0b">€${(rette[i]||0).toFixed(2)}</strong>
+        ${!ncap && costi[i]>0 ? `· Costo: <strong style="color:${col}">€${costi[i].toFixed(2)}</strong>` : costi[i]<=0 ? `<span style="color:var(--text3);font-style:italic">· costo non disponibile</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────────────────────
+// COMPOSIZIONE COSTO DEL LAVORO — heatmap CdC × categoria
+// REFACTOR UX (mag 2026): da stacked bar 100% → heatmap.
+// Razionale: le % nelle barre stack 100% sono illeggibili sotto il 5%.
+// La heatmap rende ogni cella confrontabile su entrambi gli assi.
+// ─────────────────────────────────────────────────────────────
+function renderLavoroStack(){
+  const canvas = document.getElementById('c-lavoro-stack');
+  if (!canvas) return;
+  const cdcKeys = Object.keys(DA.COSTO_LAVORO_PCT);
+  const labels  = DA.COSTO_LAVORO_LABELS;
+  const cols    = DA.COSTO_LAVORO_KEYS;
+  const colors  = DA.COSTO_LAVORO_COLORS;
+
+  let wrap = document.getElementById('c-lavoro-heat');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.id = 'c-lavoro-heat';
+    wrap.style.cssText = 'overflow-x:auto;font-size:11px;padding:6px 0;';
+    canvas.parentElement.style.height = 'auto';
+    canvas.parentElement.appendChild(wrap);
+    canvas.style.display = 'none';
+  }
+  // Calcola scala max per shading
+  const allVals = [];
+  cdcKeys.forEach(k => cols.forEach(c => allVals.push(DA.COSTO_LAVORO_PCT[k]?.[c] || 0)));
+  const maxV = Math.max(...allVals, 1);
+  const cellColor = (v) => {
+    const t = Math.min(v / maxV, 1);
+    const hue = 140 - 140 * t;
+    return `hsla(${hue},65%,45%,${0.15 + t*0.55})`;
+  };
+  let html = '<table style="border-collapse:separate;border-spacing:2px;width:100%;font-size:11px;">';
+  html += '<thead><tr>';
+  html += `<th style="text-align:left;padding:4px 8px;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;">Centro</th>`;
+  cols.forEach((c,i)=>{
+    html += `<th style="text-align:center;padding:4px 8px;min-width:78px;font-size:10px;color:${colors[i]};text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid ${colors[i]};">${labels[i]}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+  cdcKeys.forEach(k => {
+    const cdcLabel = DA.CDC[k]?.label || k;
+    html += `<tr><td style="padding:6px 8px;font-weight:600;color:var(--text1);font-size:11px;">${cdcLabel}</td>`;
+    cols.forEach((c,i) => {
+      const v = DA.COSTO_LAVORO_PCT[k]?.[c] || 0;
+      const bg = cellColor(v);
+      const txt = v > 0 ? v.toFixed(1) + '%' : '—';
+      const fw = v > maxV * 0.5 ? 800 : 600;
+      html += `<td style="background:${bg};padding:6px 8px;text-align:center;border-radius:4px;font-weight:${fw};color:${v>maxV*0.6?'#fff':'var(--text1)'};">${txt}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  html += `<div style="margin-top:8px;display:flex;align-items:center;gap:8px;font-size:10px;color:var(--text3);">
+    <span>Scala:</span>
+    <div style="height:8px;flex:1;max-width:200px;border-radius:4px;background:linear-gradient(90deg,hsla(140,65%,45%,.15),hsla(70,65%,45%,.4),hsla(0,65%,45%,.7));"></div>
+    <span>0%</span><span style="margin-left:auto;">${maxV.toFixed(0)}%</span>
+  </div>`;
+  wrap.innerHTML = html;
+}
+
+// ─── ❶ TREEMAP COSTI COOPERATIVA ─────────────────────────────────────
+function renderTreemap(){
+  const keys = ['PISA','RIETI','DROSSO','LORANZE','VICENZA','MODENA','VICO','CAMBO']
+                 .filter(k => activeCdc()==='all' || activeCdc()===k);
+  const CATS = [
+    {k:'PERSONALE',          c:'#3b82f6', lbl:'Personale'},
+    {k:'VITTO',              c:'#10b981', lbl:'Vitto'},
+    {k:'STRUTTURA',          c:'#8b5cf6', lbl:'Struttura'},
+    {k:'UTENZE',             c:'#f59e0b', lbl:'Utenze'},
+    {k:'MANUTENZIONI',       c:'#ec4899', lbl:'Manutenzioni'},
+    {k:'CONSULENTI_ESTERNI', c:'#06b6d4', lbl:'Consulenti'},
+    {k:'PRODOTTI_IGIENE',    c:'#14b8a6', lbl:'Igiene'},
+    {k:'SPESE_SANITARIE',    c:'#f97316', lbl:'Sanitario'},
+    {k:'KIT_VESTITI',        c:'#a78bfa', lbl:'Kit/Vestiti'},
+    {k:'COSTI_GENERALI',     c:'#64748b', lbl:'Generali'},
+    {k:'MEZZI_TRASPORTO',    c:'#22d3ee', lbl:'Trasporti'},
+    {k:'ALTRO',              c:'#94a3b8', lbl:'Altro'},
+  ];
+  // Somma per categoria su CdC attivi
+  const totals = CATS.map(c => ({
+    ...c,
+    tot: keys.reduce((s,k) => s + ((DA.COSTI_CAT[k]||{})[c.k] || 0), 0)
+  })).filter(c => c.tot > 0).sort((a,b) => b.tot - a.tot);
+
+  const totAll = totals.reduce((s,c)=>s+c.tot,0);
+  // Treemap stile flex con area ∝ tot (semplificato: usiamo flex-grow)
+  let html = '';
+  totals.forEach(c => {
+    const pct = totAll>0 ? (c.tot/totAll*100) : 0;
+    const fs  = pct > 15 ? '14px' : pct > 8 ? '12px' : '10px';
+    const showLabel = pct > 3;
+    html += `<div title="${c.lbl}: €${DA.fmtK(c.tot)} (${pct.toFixed(1)}%)"
+      style="flex:${c.tot};min-width:60px;background:${c.c};border-radius:5px;padding:8px;
+             display:flex;flex-direction:column;justify-content:center;align-items:center;
+             color:#fff;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,.5);cursor:pointer">
+      ${showLabel ? `<div style="font-size:${fs};line-height:1.1">${c.lbl}</div>
+        <div style="font-size:11px;font-weight:600;opacity:.95;margin-top:3px">€${DA.fmtK(c.tot)}</div>
+        <div style="font-size:9px;opacity:.85">${pct.toFixed(1)}%</div>` : ''}
+    </div>`;
+  });
+  const el = document.getElementById('treemap-costi');
+  el.style.display = 'flex';
+  el.style.gridTemplateColumns = '';  // override grid
+  el.style.gap = '4px';
+  el.innerHTML = html;
+}
+
+// ─── ❷ TORNADO SCOSTAMENTO ANNUALE ────────────────────────────────────
+function renderTornado(){
+  const keys = ['PISA','RIETI','DROSSO','LORANZE','VICENZA','MODENA','VICO','CAMBO']
+                 .filter(k => activeCdc()==='all' || activeCdc()===k);
+  // Scostamento annuale = (reale - capitolato) × presenze
+  const rows = keys.map(k => {
+    const real = (getANNO(k).prodie || 0);
+    const cap  = (DA.STIMA_CAP_PRODIE[k]?.TOTALE || 0);
+    const pres = (DA.PRESENZE_FINAN[k] || 0);
+    const deltaAnnuo = (real - cap) * pres;
+    return { k, real, cap, pres, delta: deltaAnnuo, label: DA.CDC[k].label };
+  }).filter(r => r.cap > 0).sort((a,b) => b.delta - a.delta);
+
+  DA.mkChart('c-tornado', {
+    type:'bar',
+    data:{
+      labels: rows.map(r => r.label),
+      datasets:[{
+        label:'Scostamento annuale €',
+        data: rows.map(r => +r.delta.toFixed(0)),
+        backgroundColor: rows.map(r => r.delta > 0 ? '#ef4444cc' : '#10b981cc'),
+        borderColor:     rows.map(r => r.delta > 0 ? '#ef4444' : '#10b981'),
+        borderWidth:1, borderRadius:5,
+      }]
+    },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          callbacks:{
+            label: ctx => {
+              const r = rows[ctx.dataIndex];
+              return [
+                `Reale: €${r.real.toFixed(2)}/prodie × ${DA.fmt(r.pres)} pres = €${DA.fmtK(r.real*r.pres)}`,
+                `Capit: €${r.cap.toFixed(2)}/prodie × ${DA.fmt(r.pres)} pres = €${DA.fmtK(r.cap*r.pres)}`,
+                `Delta: ${r.delta>=0?'+':''}€${DA.fmtK(r.delta)} ${r.delta>0?'(over)':'(saving)'}`
+              ];
+            }
+          }
+        }
+      },
+      scales:{
+        x:{
+          title:{display:true,text:'€ annuale (Reale − Capitolato)',color:'#546a87'},
+          ticks:{callback:v => '€'+DA.fmtK(v)},
+          grid:{color:'rgba(255,255,255,.04)'}
+        },
+        y:{grid:{display:false}}
+      }
+    }
+  });
+}
+
+function renderAll(){
+  DA.chartDefaults(Chart);
+  renderKpi();
+  renderTreemap();
+  renderTornado();
+  renderIncidenza();
+  renderCapVsReale();
+  renderMargine();
+  renderCatPie();
+  renderProdie();
+  renderLavoroStack();
+  renderOreH();
+  renderOreLavorate();
+  renderTable();
+  renderMansioni();
+}
+document.addEventListener('DOMContentLoaded',renderAll);
+</script>
+</body>
+</html>

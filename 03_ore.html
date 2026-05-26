@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="athena-static-only" content="true"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ore Servizi — Dashboard Analytics</title>
+<link rel="stylesheet" href="shared/style.css?v=20260525-1800">
+<style>
+/* ── FILTRI AGGIUNTIVI ── */
+.btn-today {
+  background:var(--violet); color:#fff; border:none;
+  padding:5px 12px; border-radius:6px; font-size:12px;
+  font-weight:600; cursor:pointer; transition:opacity .15s;
+}
+.btn-today:hover { opacity:.85; }
+
+/* ── CONTEXT STRIP ── */
+.ctx-strip {
+  background:rgba(139,92,246,.08); border:1px solid rgba(139,92,246,.25);
+  border-radius:var(--radius); padding:8px 14px;
+  font-size:12px; color:var(--text); margin-bottom:18px;
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+}
+.ctx-badge {
+  background:rgba(139,92,246,.2); color:#a78bfa;
+  padding:2px 10px; border-radius:12px; font-weight:700; font-size:11px;
+}
+.ctx-arrow { color:var(--text3); }
+
+/* ── SCAGLIONE CARDS ── */
+.scagl-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; margin-bottom:22px; }
+.scagl-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius-lg); padding:14px 16px; position:relative;
+}
+.scagl-card.escluso { opacity:.55; }
+.scagl-head { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
+.scagl-cov { font-size:24px; font-weight:800; }
+.scagl-meta { font-size:10px; color:var(--text3); margin-top:2px; }
+.scagl-row { display:flex; justify-content:space-between; font-size:11px; margin:3px 0; }
+.scagl-key { color:var(--text2); }
+.scagl-val { font-weight:700; font-variant-numeric:tabular-nums; }
+.scagl-bar { height:6px; border-radius:3px; background:var(--surface2); margin-top:8px; overflow:hidden; }
+.scagl-fill { height:100%; border-radius:3px; transition:width .5s; }
+.note-tag {
+  display:inline-block; font-size:10px; padding:2px 7px;
+  border-radius:4px; margin-top:6px; font-weight:600;
+}
+.note-escluso { background:rgba(100,116,139,.15); color:#94a3b8; }
+.note-multi   { background:rgba(6,182,212,.1); color:#22d3ee; }
+
+/* ── MANSIONI TABLE ── */
+.mans-table { width:100%; border-collapse:collapse; font-size:11px; }
+.mans-table th {
+  background:var(--surface2); color:var(--text2); font-size:10px;
+  font-weight:700; text-transform:uppercase; padding:7px 8px;
+  text-align:right; border-bottom:2px solid var(--border2);
+}
+.mans-table th:first-child { text-align:left; }
+.mans-table td { padding:6px 8px; text-align:right; border-bottom:1px solid var(--border); }
+.mans-table td:first-child { text-align:left; font-weight:600; color:var(--text2); }
+.mans-table tr:hover td { background:rgba(255,255,255,.02); }
+.m-over  { color:#f87171; font-weight:700; }
+.m-ok    { color:#fbbf24; }
+.m-under { color:#34d399; font-weight:700; }
+
+/* ── CONF CARDS ── */
+.conf-card-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px; }
+.conf-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; }
+.conf-val  { font-size:28px; font-weight:800; margin:4px 0; }
+.conf-bar  { height:8px; border-radius:4px; background:var(--surface2); overflow:hidden; margin-top:4px; }
+.conf-fill { height:100%; border-radius:4px; transition:width .6s; }
+.section-divider { border:none; border-top:2px solid var(--border2); margin:32px 0 20px; }
+</style>
+</head>
+<body data-page="ore">
+<div id="topbar" class="topbar"></div>
+<div id="data-mode-bar" class="data-bar static mb-16"><span class="dot"></span>Caricamento dati...</div>
+
+<div class="main">
+
+  <div class="page-header">
+    <h1><span class="icon">⏱️</span> Ore Servizi &amp; Dotazione Allegato A</h1>
+    <p>Ospiti presenti → Scaglione Allegato A → <strong>Ore dovute/giorno</strong> vs erogate reali — filtro per mese o giorno</p>
+  </div>
+
+  <!-- FILTRI -->
+  <div class="filters">
+    <label>Anno:</label>
+    <select id="f-anno" onchange="renderAll()">
+      <option value="2025">2025</option>
+      <option value="2026" selected>2026</option>
+    </select>
+    <label>Periodo:</label>
+    <select id="f-mese" onchange="renderAll()">
+      <option value="all">Media annuale</option>
+      <option value="0">Gennaio</option>
+      <option value="1">Febbraio</option>
+      <option value="2">Marzo</option>
+      <option value="3">Aprile</option>
+      <option value="4">Maggio</option>
+      <option value="5">Giugno</option>
+      <option value="6">Luglio</option>
+      <option value="7">Agosto</option>
+      <option value="8">Settembre</option>
+      <option value="9">Ottobre</option>
+      <option value="10">Novembre</option>
+      <option value="11">Dicembre</option>
+    </select>
+    <span class="filters-sep">o</span>
+    <label>Data:</label>
+    <input type="date" id="f-data" onchange="syncDataToMese()" style="width:140px">
+    <label>Centro:</label>
+    <select id="f-cdc" onchange="renderAll()">
+      <option value="all">Tutti i centri</option>
+      <option value="PISA">CAS PISA</option>
+      <option value="RIETI">CAD RIETI</option>
+      <option value="DROSSO">DROSSO</option>
+      <option value="LORANZE">LORANZÈ</option>
+      <option value="VICENZA">VICENZA</option>
+      <option value="MODENA">MODENA IMM.</option>
+      <option value="VICO">VICO-VALCHIUSA</option>
+      <option value="CAMBO">CAMPOBASSO</option>
+    </select>
+    <button class="btn-today" onclick="setCurrentMonth()">📅 Mese corrente</button>
+    <button class="btn-today" onclick="setToday()" style="background:var(--text3)">📊 Anno 2025</button>
+    <button class="btn-apply" onclick="renderAll()">↻ Aggiorna</button>
+  </div>
+
+  <!-- BANNER MESE CORRENTE -->
+  <div id="banner-mese-corrente" style="display:none;margin:8px 0 4px;padding:10px 16px;
+    background:#92400e22;border:1px solid #d97706;border-radius:8px;
+    color:#fbbf24;font-size:.85rem;line-height:1.4;"></div>
+
+  <!-- CONTEXT STRIP -->
+  <div class="ctx-strip" id="ctx-strip">
+    <span>Caricamento...</span>
+  </div>
+
+  <!-- KPI -->
+  <div class="kpi-grid" id="kpi-ore"></div>
+
+  <!-- CHART 1: confronto dovute vs erogate per CdC -->
+  <div class="chart-grid cols-full">
+    <div class="chart-card">
+      <div class="chart-title">
+        <span class="dot" style="background:#8b5cf6"></span>
+        Ore dovute (Allegato A × gg) vs Erogate — ore mensili per CdC
+        <span class="sub">Erogate: dati reali Organico Mensile (Zoho) dove disponibili ✓, stima contratti annuali ~ altrimenti</span>
+      </div>
+      <div class="chart-wrap" style="height:280px"><canvas id="c-cdc-bar"></canvas></div>
+    </div>
+  </div>
+
+  <!-- CHART 2: trend mensile -->
+  <div class="chart-grid cols-full">
+    <div class="chart-card">
+      <div class="chart-title">
+        <span class="dot" style="background:#3b82f6"></span>
+        Trend mensile — Ore dovute/giorno vs Erogate/giorno
+        <span class="sub" id="trend-subtitle">tutti i mesi</span>
+      </div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-trend"></canvas></div>
+    </div>
+  </div>
+
+  <!-- SCAGLIONE CARDS -->
+  <div class="section-title">🏢 Dettaglio per Centro — Scaglione Attivo</div>
+  <div class="scagl-grid" id="scagl-cards"></div>
+
+  <!-- TABELLA MANSIONI -->
+  <div class="section-title">👥 Ore Mensili per Mansione — Allegato A (dovute) vs Zoho (erogate) con Scostamento</div>
+  <div class="chart-card" style="overflow-x:auto">
+    <table class="mans-table" id="t-mans"></table>
+  </div>
+
+  <!-- ═══════════════════════════════════ ORGANICO ALLEGATO A -->
+  <hr class="section-divider">
+  <div class="page-header" style="padding:0 0 8px">
+    <h1 style="font-size:18px"><span class="icon">🏥</span> Organico per Mansione Organico — Allegato A
+      <span style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);color:#34d399;font-size:10px;font-weight:700;padding:3px 10px;border-radius:12px;margin-left:10px">dati reali · Storico Rapporto Zoho Creator · 28/04/2026</span>
+    </h1>
+    <p style="color:var(--text3);font-size:12px">
+      Contratti <strong>ATTIVI</strong> aggregati per categoria Allegato A: ore contrattualizzate (h/mese) vs ore <strong>richieste dal capitolato</strong> (su ospiti medi 2025).
+      Seleziona un centro nel filtro sopra per il dettaglio per mansione.
+    </p>
+  </div>
+
+  <div id="organico-alert" style="margin-bottom:14px"></div>
+
+  <div class="chart-grid cols-full" id="organico-chart-wrap">
+    <div class="chart-card">
+      <div class="chart-title">
+        <span class="dot" style="background:#10b981"></span>
+        Ore/mese per Mansione Organico — <span id="organico-chart-title">Tutti i centri</span>
+        <span class="sub">h/mese contrattualizzate (Storico Rapporto) vs h/mese richieste (Allegato A · ospiti medi 2025)</span>
+      </div>
+      <div class="chart-wrap" style="height:320px"><canvas id="c-organico-bar"></canvas></div>
+    </div>
+  </div>
+
+  <div class="chart-card" id="organico-table-wrap" style="overflow-x:auto">
+    <table class="mans-table" id="t-organico"></table>
+  </div>
+
+  <!-- ALLEGATO A REFERENCE -->
+  <div class="section-title">📋 Riferimento Allegato A — Scale Ore/Giorno per Scaglione</div>
+  <div class="chart-grid cols-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#8b5cf6"></span>CC — Ore/giorno per fascia ospiti</div>
+      <div class="chart-wrap" style="height:220px"><canvas id="c-allegato-cc"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#ec4899"></span>CAD — Ore/giorno per fascia ospiti</div>
+      <div class="chart-wrap" style="height:220px"><canvas id="c-allegato-cad"></canvas></div>
+    </div>
+  </div>
+
+  <div class="alert alert-info" style="margin-top:4px;margin-bottom:24px">
+    ℹ️ <strong>L'Allegato A fornisce il totale ore/giorno per il centro</strong> (es. 32 h/g per 41-50 ospiti), <em>non</em> un valore per ospite.
+    DROSSO e VICO operano con contratto/convenzione diversa: l'Allegato A non si applica.
+    MODENA ha 35 strutture miste CC+CAD: il confronto aggregato non è significativo.
+  </div>
+
+  <!-- ═══════════════════════════════════════════════ CONFORMITÀ -->
+  <hr class="section-divider">
+  <div class="page-header" style="padding:0 0 8px">
+    <h1 style="font-size:18px"><span class="icon">🔍</span> Indice di Conformità
+      <span style="background:rgba(6,182,212,.12);border:1px solid rgba(6,182,212,.3);color:#22d3ee;font-size:10px;font-weight:700;padding:3px 10px;border-radius:12px;margin-left:10px">da visite ispettive · Zoho Analytics</span>
+    </h1>
+    <p style="color:var(--text3);font-size:12px">
+      ⚠️ L'indice è il risultato di ispezioni periodiche su Zoho Analytics — non è calcolato dalle ore erogate.
+      I due indicatori misurano aspetti distinti della qualità del servizio.
+    </p>
+  </div>
+
+  <div class="conf-card-grid" id="conf-cdc-cards"></div>
+
+  <!-- SINTESI ANOMALIE -->
+  <div id="conf-sintesi" style="margin:14px 0"></div>
+
+  <div class="chart-grid cols-2" style="margin-top:14px">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#06b6d4"></span>Conformità per struttura — MODENA IMMIGRAZIONE <span class="sub">ordinato per indice crescente</span></div>
+      <div style="max-height:340px;overflow-y:auto" id="conf-modena-bars"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#f59e0b"></span>Distribuzione indice conformità (strutture MODENA)</div>
+      <div class="chart-wrap" style="height:200px"><canvas id="c-conf-dist"></canvas></div>
+      <!-- CC vs CAD breakdown -->
+      <div id="conf-cc-cad" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<script src="shared/data.js?v=20260525-1800"></script>
+<script src="shared/filters.js?v=20260525-1800"></script>
+<script src="shared/hr_data.js?v=20260525-1800"></script>
+<script src="shared/live.js?v=20260525-1800"></script>
+<script src="shared/nav.js?v=20260525-1800"></script>
+<script>
+// ─────────────────────────────────────────────────────────────
+// COSTANTI
+// ─────────────────────────────────────────────────────────────
+const GIORNI_MESE = { 2025:[31,28,31,30,31,30,31,31,30,31,30,31], 2026:[31,28,31,30,31,30,31,31,30,31,30,31] };
+// Capitolato Allegato A — CC e SUA/CAD soggetti al capitolato standard
+// CC: PISA (250), LORANZÈ (90), MODENA (35 strutture mix CC+CAD), CAMBO (100)
+// SUA/CAD: RIETI (50+50), VICENZA (50/rete)
+// Esclusi: DROSSO e VICO per contratto diverso (accordo quadro specifico)
+const ALLEGATO_A_KEYS = ['PISA','RIETI','LORANZE','VICENZA','MODENA','CAMBO']; // Allegato A applicabile
+const ESCLUSI_ALLEGATO_A = {
+  DROSSO: 'Contratto quadro diverso',
+  VICO:   'Contratto quadro diverso',
+};
+const ALL_KEYS = ['PISA','RIETI','DROSSO','LORANZE','VICENZA','MODENA','VICO','CAMBO'];
+
+// ─────────────────────────────────────────────────────────────
+// FIX MANS_ZOHO_MAP: rimuovi 'ADDETTO' (include ADDETTO PULIZIE = pulizie,
+// non conta per Allegato A che riguarda solo staff di servizio)
+// ─────────────────────────────────────────────────────────────
+if(window.DA && DA.MANS_ZOHO_MAP){
+  DA.MANS_ZOHO_MAP.operatori = ['OPERATORE CENTRO ACCOGLIENZA','OPERATORE/TRICE','TUTTOFARE','ANIMATORE'];
+  // 'ADDETTO' rimosso: ADDETTO PULIZIE non rientra nel capitolato Allegato A
+}
+
+// ─────────────────────────────────────────────────────────────
+// OVERRIDE DA.getOreM: usa DA.HR_ORE_CDC (Zoho reale) dove disponibile
+// e la distribuzione proporzionale solo come fallback.
+// Questo dà ore mensili REALI per i mesi con rapporti Zoho disponibili.
+// ─────────────────────────────────────────────────────────────
+;(function(){
+  if(!window.DA || !DA.HR_ORE_CDC) return; // hr_data.js non disponibile — nessun override
+  const _origGetOreM = DA.getOreM.bind(DA);
+  DA.getOreM = function(anno){
+    const proportional = _origGetOreM(anno);
+    const result = {};
+    Object.keys(proportional).forEach(k => {
+      const yearData = (DA.HR_ORE_CDC[k] || {})[String(anno)] || {};
+      result[k] = proportional[k].map((pv, mIdx) => {
+        const d = yearData[String(mIdx + 1)]; // mesi Zoho sono 1-based
+        return (d && d.lav > 0) ? Math.round(d.lav) : pv;
+      });
+    });
+    return result;
+  };
+})();
+
+// ─────────────────────────────────────────────────────────────
+// HELPERS FILTRI
+// ─────────────────────────────────────────────────────────────
+function getAnno(){ return parseInt(document.getElementById('f-anno')?.value||2025); }
+function getMese(){ const v=document.getElementById('f-mese')?.value; return v||'all'; }
+function getCdc() { return document.getElementById('f-cdc')?.value||'all'; }
+function getKeys(){
+  const v = getCdc();
+  return v==='all' ? ALL_KEYS : [v];
+}
+function getAllegatoKeys(){
+  const keys = getKeys();
+  return keys.filter(k=>ALLEGATO_A_KEYS.includes(k));
+}
+
+function setToday(){
+  // Default: Media annuale 2025 (dati ore mensili più completi e affidabili).
+  // Il 2026 ha ancora molti mesi senza dati reali → evita visualizzazioni sballate.
+  document.getElementById('f-anno').value = '2025';
+  document.getElementById('f-mese').value = 'all';
+  document.getElementById('f-data').value = '';
+  renderAll();
+}
+
+function setCurrentMonth(){
+  // Imposta il mese precedente al corrente (dati chiusi e disponibili)
+  const now = new Date();
+  let mese = now.getMonth() - 1;
+  let annoOre = now.getFullYear();
+  if(mese < 0){ mese = 11; annoOre = annoOre - 1; }
+  document.getElementById('f-anno').value = String(Math.min(Math.max(annoOre,2025),2026));
+  document.getElementById('f-mese').value = String(mese);
+  const dd = String(now.getDate()).padStart(2,'0');
+  const mm = String(mese+1).padStart(2,'0');
+  document.getElementById('f-data').value = `${annoOre}-${mm}-${dd}`;
+  renderAll();
+}
+
+function syncDataToMese(){
+  const d = document.getElementById('f-data').value;
+  if(!d) return;
+  const dt = new Date(d);
+  const anno = dt.getFullYear();
+  const mese = dt.getMonth();
+  if(anno>=2025 && anno<=2026){
+    document.getElementById('f-anno').value = String(anno);
+    document.getElementById('f-mese').value = String(mese);
+    renderAll();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// CALCOLO PRINCIPALE: per CdC e mese → stats ore/giorno
+// ─────────────────────────────────────────────────────────────
+function getMeseStats(k, anno, mese){
+  const presArr = DA.getPresenzeM(anno)[k] || Array(12).fill(0);
+  const oreArr  = DA.getOreM(anno)[k] || Array(12).fill(0);
+  const gg_arr  = GIORNI_MESE[anno] || GIORNI_MESE[2025];
+  const tipo    = DA.CDC[k]?.tipo || 'CC';
+
+  if(mese === 'all'){
+    const totPres = DA.sum(presArr);
+    const totOre  = DA.sum(oreArr);
+    const totGg   = gg_arr.reduce((a,b)=>a+b,0);
+    const ospMedi = totGg>0 ? totPres/totGg : 0;
+    const fascia  = ospMedi>0 && ALLEGATO_A_KEYS.includes(k) ? DA.getMansioniFascia(Math.round(ospMedi), tipo) : null;
+    return { label:'Media annuale', pres:totPres, ore:totOre, gg:totGg,
+             ospMedi, fascia,
+             dovGiorno: fascia?.tot||0,
+             erGiorno:  totGg>0 ? totOre/totGg : 0 };
+  }
+  const m  = parseInt(mese);
+  const gg = gg_arr[m] || 30;
+  const pres = presArr[m]||0;
+  const ore  = oreArr[m]||0;
+  const ospMedi = gg>0 ? pres/gg : 0;
+  const fascia  = ospMedi>0 && ALLEGATO_A_KEYS.includes(k) ? DA.getMansioniFascia(Math.round(ospMedi), tipo) : null;
+  return { label:DA.MESI_FULL[m]||'Mese', pres, ore, gg,
+           ospMedi, fascia,
+           dovGiorno: fascia?.tot||0,
+           erGiorno:  gg>0 ? ore/gg : 0 };
+}
+
+// ─────────────────────────────────────────────────────────────
+// MAPPING: MANS_KEYS (Allegato A) → ORE_MANS_KEYS (Organico Mensile)
+// Quando disponibili i dati reali Zoho (Organico Mensile), usiamo
+// le ore erogate reali (er) invece dell'approssimazione annuale.
+// ─────────────────────────────────────────────────────────────
+const MANS_OM_MAP = {
+  'coordinatore': ['dir'],
+  'operatori':    ['op_d', 'op_ne', 'op_nr'],
+  'mediatore':    ['med'],
+  'legale':       [],            // non in Organico Mensile → fallback stima
+  'ass_sociale':  ['soc'],
+  'psicologo':    [],            // non in Organico Mensile → fallback stima
+  'infermiere':   ['inf', 'mde', 'mdr'],  // infermiere + medici
+};
+
+// ─────────────────────────────────────────────────────────────
+// CALCOLO MANSIONI MENSILI — usa dati reali Organico Mensile
+// se disponibili, altrimenti stima da contratti annuali.
+//
+// Priorità dati erogate:
+//   1° DA.getOreMansM() → ore reali Zoho (Organico Mensile Erogato)
+//   2° DA.MANSIONI annuale × peso mensile (approssimazione)
+//
+// Ore dovute (Allegato A):
+//   fascia.m[mk] × gg_mese  (calcolo su ospiti medi effettivi)
+// ─────────────────────────────────────────────────────────────
+function getMansioniMensili(k, anno, mese){
+  const presArr   = DA.getPresenzeM(anno)[k] || Array(12).fill(0);
+  const oreArr    = DA.getOreM(anno)[k]       || Array(12).fill(0);
+  const gg_arr    = GIORNI_MESE[anno] || GIORNI_MESE[2025];
+  const tipo      = DA.CDC[k]?.tipo || 'CC';
+  const mans      = DA.MANSIONI[k];
+  const totOreAnn = DA.COSTI_ORE[k]?.ore || 0;
+
+  let preseMese, gg, oreMeseTot;
+  if(mese === 'all'){
+    preseMese  = DA.sum(presArr);
+    gg         = gg_arr.reduce((a,b)=>a+b,0);
+    oreMeseTot = DA.sum(oreArr);
+  } else {
+    const m    = parseInt(mese);
+    preseMese  = presArr[m]||0;
+    gg         = gg_arr[m]||30;
+    oreMeseTot = oreArr[m]||0;
+  }
+
+  const ospMedi  = gg>0 ? preseMese/gg : 0;
+  const appAlleg = !ESCLUSI_ALLEGATO_A[k];
+  const fascia   = (ospMedi>0 && appAlleg)
+                   ? DA.getMansioniFascia(Math.round(ospMedi), tipo) : null;
+
+  // ── ORE DOVUTE mensili: fascia.m[mk] × gg ────────────────
+  const dovute = {};
+  DA.MANS_KEYS.forEach(mk => { dovute[mk] = fascia ? (fascia.m[mk]||0)*gg : 0; });
+
+  // ── FONTE DATI REALI: Organico Mensile (Zoho Creator) ────
+  // DA.getOreMansM restituisce {op_d:{er,req},...} o null se non disponibile.
+  const omDati = (typeof DA.getOreMansM === 'function')
+                  ? DA.getOreMansM(k, anno, mese) : null;
+  const usaOmReale = omDati !== null;
+
+  // ── ORE EROGATE mensili ───────────────────────────────────
+  const erogate = {};
+  const weight  = totOreAnn>0 ? oreMeseTot/totOreAnn : 1/12;
+
+  DA.MANS_KEYS.forEach(mk => {
+    if(usaOmReale){
+      // Dati reali: somma le categorie OM mappate a questo MANS_KEY
+      const omKeys = MANS_OM_MAP[mk] || [];
+      if(omKeys.length === 0){
+        // Mansione non presente in OM → usa stima annuale come fallback
+        if(!mans){ erogate[mk]=null; return; }
+        const zohoKeys = DA.MANS_ZOHO_MAP[mk]||[];
+        const annH = mans.filter(r=>zohoKeys.some(zk=>r.r.toUpperCase().includes(zk)))
+                         .reduce((s,r)=>s+r.h, 0);
+        erogate[mk] = Math.round(annH * weight);
+      } else {
+        erogate[mk] = Math.round(omKeys.reduce((s,omk)=>s+(omDati[omk]?.er||0), 0));
+      }
+    } else {
+      // Fallback: stima da contratti annuali × peso mensile presenze
+      if(!mans){ erogate[mk]=null; return; }
+      const zohoKeys = DA.MANS_ZOHO_MAP[mk]||[];
+      const annH = mans.filter(r=>zohoKeys.some(zk=>r.r.toUpperCase().includes(zk)))
+                       .reduce((s,r)=>s+r.h, 0);
+      erogate[mk] = Math.round(annH * weight);
+    }
+  });
+
+  // ── SCOSTAMENTO mensile: erogate - dovute ────────────────
+  const scostamento = {};
+  DA.MANS_KEYS.forEach(mk => {
+    scostamento[mk] = erogate[mk]!=null ? erogate[mk]-dovute[mk] : null;
+  });
+
+  const dovTot   = fascia ? fascia.tot*gg : 0;
+  const erMapped = (usaOmReale || mans)
+    ? DA.MANS_KEYS.reduce((s,mk)=>(erogate[mk]||0)+s, 0)
+    : null;
+
+  return { ospMedi, fascia, gg, preseMese, oreMeseTot,
+           hasMansData: usaOmReale || !!mans,
+           usaOmReale,    // flag: true = dati reali Organico Mensile
+           dovute, erogate, scostamento,
+           dovTot, erTot:oreMeseTot, erMapped };
+}
+
+// ─────────────────────────────────────────────────────────────
+// CONTEXT STRIP
+// ─────────────────────────────────────────────────────────────
+function renderContext(){
+  const anno = getAnno(), mese = getMese(), cdc = getCdc();
+  const keys = getAllegatoKeys();
+  let html = '';
+
+  if(cdc !== 'all' && ALLEGATO_A_KEYS.includes(cdc)){
+    const s = getMeseStats(cdc, anno, mese);
+    const osp = s.ospMedi.toFixed(0);
+    const tipo = DA.CDC[cdc]?.tipo||'CC';
+    const fasciaLabel = s.fascia ? `${s.fascia.min}${s.fascia.max<9999?'–'+s.fascia.max:'+'}` : 'N/A';
+    html = `
+      <span class="ctx-badge">${s.label} ${anno}</span>
+      <span class="ctx-arrow">→</span>
+      <span><strong>${DA.CDC[cdc]?.label||cdc}</strong>: ${Math.round(s.pres).toLocaleString('it-IT')} pres. totali</span>
+      <span class="ctx-arrow">→</span>
+      <span>~${osp} ospiti/giorno</span>
+      <span class="ctx-arrow">→</span>
+      <span>Scaglione <strong>${tipo} ${fasciaLabel}</strong></span>
+      <span class="ctx-arrow">→</span>
+      <span style="color:#a78bfa;font-weight:700">${s.dovGiorno} ore/giorno richieste</span>
+      <span class="ctx-arrow">→</span>
+      <span style="color:#10b981;font-weight:700">${s.erGiorno.toFixed(1)} ore/giorno erogate</span>`;
+  } else {
+    const parts = keys.slice(0,3).map(k=>{
+      const s = getMeseStats(k, anno, mese);
+      return `<strong>${k}</strong>: ${Math.round(s.ospMedi)} osp/g→${s.dovGiorno}h req`;
+    });
+    html = `<span class="ctx-badge">${mese==='all'?'Media annuale':DA.MESI_FULL[parseInt(mese)]} ${anno}</span>
+            <span class="ctx-arrow">→</span>
+            ${parts.join('<span class="ctx-arrow">·</span>')}
+            ${keys.length>3?`<span style="color:var(--text3);font-size:10px">+${keys.length-3} altri</span>`:''}`;
+  }
+  document.getElementById('ctx-strip').innerHTML = html ||
+    '<span style="color:var(--text3)">Seleziona un periodo e un centro per vedere il dettaglio</span>';
+}
+
+// ─────────────────────────────────────────────────────────────
+// KPI CARDS — ore mensili per mansione (logica corretta)
+// ─────────────────────────────────────────────────────────────
+function renderKpi(){
+  const anno=getAnno(), mese=getMese();
+  const keys=getAllegatoKeys().filter(k=>!ESCLUSI_ALLEGATO_A[k]);
+  if(!keys.length){
+    document.getElementById('kpi-ore').innerHTML='<div class="alert alert-warn">⚠️ Nessun centro soggetto all\'Allegato A nel filtro corrente.</div>';
+    return;
+  }
+
+  let totPres=0, totGg=0, totDovMensili=0, totErMapped=0, deficitCdcCount=0;
+  keys.forEach(k=>{
+    const mm=getMansioniMensili(k,anno,mese);
+    totPres+=mm.preseMese; totGg+=mm.gg;
+    totDovMensili+=mm.dovTot;
+    if(mm.erMapped!=null) totErMapped+=mm.erMapped;
+    if(mm.hasMansData && mm.fascia){
+      const hasDeficit = DA.MANS_KEYS.some(mk=>(mm.scostamento[mk]||0)<0 && mm.dovute[mk]>0);
+      if(hasDeficit) deficitCdcCount++;
+    }
+  });
+
+  const avgOsp  = totGg>0 ? totPres/totGg : 0;
+  const scoTot  = totErMapped - totDovMensili;
+  const periodo = mese==='all'?'Anno':DA.MESI_LABEL[parseInt(mese)];
+
+  const kpis=[
+    {icon:'👥',val:Math.round(avgOsp),
+     label:'Ospiti medi/giorno (CdC con Allegato A)', col:'kpi-blue'},
+    {icon:'📋',val:DA.fmt(totDovMensili)+'h',
+     label:`Ore dovute ${periodo} — Allegato A × giorni`, col:'kpi-violet'},
+    {icon:'⏱️',val:totErMapped>0?DA.fmt(totErMapped)+'h':'N/D',
+     label:`Ore erogate ${periodo} (mansioni mappate Zoho)`, col:'kpi-green'},
+    {icon:'📊',val:totErMapped>0?(scoTot>=0?'+':'')+DA.fmt(scoTot)+'h':'N/D',
+     label:`Scostamento ore ${periodo} (erogate − dovute)`,
+     col:scoTot>=0?'kpi-green':scoTot<-500?'kpi-red':'kpi-amber'},
+    {icon:'⚠️',val:deficitCdcCount===0?'✓ Nessuno':`${deficitCdcCount} CdC`,
+     label:'CdC con deficit su almeno una mansione',
+     col:deficitCdcCount===0?'kpi-green':'kpi-red'},
+  ];
+  document.getElementById('kpi-ore').innerHTML=kpis.map(k=>`
+    <div class="kpi-card ${k.col}">
+      <div class="kpi-icon">${k.icon}</div>
+      <div class="kpi-val">${k.val}</div>
+      <div class="kpi-label">${k.label}</div>
+    </div>`).join('');
+}
+
+// ─────────────────────────────────────────────────────────────
+// CHART 1: GROUPED BAR — ore MENSILI dovute vs erogate per CdC
+// (confronto corretto: Allegato A × gg vs mansioni Zoho × peso)
+// ─────────────────────────────────────────────────────────────
+function renderCdcBar(){
+  const anno=getAnno(), mese=getMese();
+  const keys=getAllegatoKeys().filter(k=>!ESCLUSI_ALLEGATO_A[k]); // escludi esplicitamente
+  if(!keys.length){ return; }
+  const meseLbl = mese==='all'?'Anno '+anno:DA.MESI_LABEL[parseInt(mese)]+' '+anno;
+
+  // Solo centri con dati MANSIONI disponibili
+  const keysConDati = keys.filter(k=>!!DA.MANSIONI[k]);
+  const keysSenzaDati = keys.filter(k=>!DA.MANSIONI[k]);
+
+  const labels  = keysConDati.map(k=>DA.CDC[k]?.label||k);
+  const dovute  = keysConDati.map(k=>getMansioniMensili(k,anno,mese).dovTot||0);
+  const erogate = keysConDati.map(k=>{
+    const mm=getMansioniMensili(k,anno,mese);
+    return mm.erMapped||0;
+  });
+
+  // Avviso centri senza dati MANSIONI
+  if(keysSenzaDati.length){
+    const nomesenza = keysSenzaDati.map(k=>DA.CDC[k]?.label||k).join(', ');
+    document.querySelector('#c-cdc-bar').closest('.chart-card')
+      .querySelector('.chart-title .sub').textContent =
+      `Nota: ${nomesenza} — dati ore per mansione non disponibili in Zoho (esclusi dal grafico)`;
+  }
+
+  DA.mkChart('c-cdc-bar',{type:'bar',
+    data:{labels,
+      datasets:[
+        {label:`Ore dovute (Allegato A × gg)`,
+         data:dovute, backgroundColor:'#8b5cf6aa', borderColor:'#8b5cf6', borderWidth:1, borderRadius:3},
+        {label:`Ore erogate (ruoli Allegato A da Zoho)`,
+         data:erogate, backgroundColor:'#10b981aa', borderColor:'#10b981', borderWidth:1, borderRadius:3},
+      ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top'},
+        tooltip:{callbacks:{
+          label:ctx=>`${ctx.dataset.label}: ${DA.fmt(ctx.parsed.y)} h`,
+          afterBody: items => {
+            const i = items[0]?.dataIndex;
+            if(i==null) return [];
+            const k = keysConDati[i];
+            const mm = getMansioniMensili(k,anno,mese);
+            const cov = mm.dovTot>0 ? Math.round(mm.erMapped/mm.dovTot*100) : null;
+            return cov!=null ? [`Copertura Allegato A: ${cov}%`] : [];
+          }
+        }}},
+      scales:{y:{title:{display:true,text:`ore (ruoli Allegato A)`,color:'#546a87'},beginAtZero:true}}}
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// CHART 2: LINE TREND — evoluzione mensile per CdC selezionato
+// ─────────────────────────────────────────────────────────────
+function renderTrend(){
+  const anno=getAnno(), mese=getMese(), cdc=getCdc();
+  const gg = GIORNI_MESE[anno] || GIORNI_MESE[2025];
+
+  // Per trend usiamo il CdC selezionato (o il primo Allegato A se tutti)
+  const keysAA = getAllegatoKeys();
+  const trendKey = (cdc!=='all' && ALLEGATO_A_KEYS.includes(cdc)) ? cdc
+                 : (keysAA.length ? keysAA[0] : null);
+  document.getElementById('trend-subtitle').textContent =
+    trendKey ? `${DA.CDC[trendKey]?.label} — tutti i mesi ${anno}` : 'seleziona un CdC';
+  if(!trendKey) return;
+
+  const presArr = DA.getPresenzeM(anno)[trendKey] || Array(12).fill(0);
+  const oreArr  = DA.getOreM(anno)[trendKey]  || Array(12).fill(0);
+  const tipo    = DA.CDC[trendKey]?.tipo||'CC';
+
+  const dovute  = DA.MESI_LABEL.map((_,m)=>{
+    const ospMedi = gg[m]>0 ? presArr[m]/gg[m] : 0;
+    if(ospMedi<=0) return null;
+    return DA.getMansioniFascia(Math.round(ospMedi),tipo)?.tot||0;
+  });
+  // FIX: usa ruoli mappati Allegato A (non tutti i ruoli Zoho) — confronto omogeneo
+  const erogate = DA.MESI_LABEL.map((_,m)=>{
+    const mm = getMansioniMensili(trendKey, anno, String(m));
+    if(!mm.hasMansData || mm.erMapped==null) return null;
+    return gg[m]>0 ? +(mm.erMapped/gg[m]).toFixed(1) : null;
+  });
+  const ospiti  = DA.MESI_LABEL.map((_,m)=> gg[m]>0 ? Math.round(presArr[m]/gg[m]) : 0);
+
+  // Highlight selected month
+  const meseIdx = mese!=='all' ? parseInt(mese) : null;
+  const pointRadius = dovute.map((_,i)=> i===meseIdx ? 7 : 3);
+  const pointRadiusEr = erogate.map((_,i)=> i===meseIdx ? 7 : 3);
+
+  DA.mkChart('c-trend',{type:'line',
+    data:{labels:DA.MESI_LABEL,
+      datasets:[
+        {label:'Ore dovute/g (Allegato A)',
+         data:dovute, borderColor:'#8b5cf6', backgroundColor:'#8b5cf620',
+         fill:true, tension:0, borderWidth:2, stepped:true,
+         pointRadius, pointBackgroundColor:'#8b5cf6'},
+        {label:'Ore erogate/g (stima)',
+         data:erogate, borderColor:'#10b981', backgroundColor:'#10b98115',
+         fill:true, tension:0.3, borderWidth:2,
+         pointRadius:pointRadiusEr, pointBackgroundColor:'#10b981'},
+        {label:'Ospiti medi/g',
+         data:ospiti, borderColor:'#3b82f680', borderWidth:1, borderDash:[3,3],
+         tension:0.3, pointRadius:0, yAxisID:'y2'},
+      ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top'},
+        tooltip:{callbacks:{
+          label:ctx=>{
+            if(ctx.datasetIndex===2) return `Ospiti: ${ctx.parsed.y}`;
+            return `${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(1)||'N/D'} h/g`;
+          }}}},
+      scales:{
+        y:{title:{display:true,text:'ore/giorno',color:'#546a87'},beginAtZero:true},
+        y2:{position:'right',title:{display:true,text:'ospiti/g',color:'#3b82f680'},
+            grid:{display:false},beginAtZero:true}
+      }}
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// SCAGLIONE CARDS
+// ─────────────────────────────────────────────────────────────
+function renderScaglioneCards(){
+  const anno=getAnno(), mese=getMese();
+  const keys=getKeys();
+
+  document.getElementById('scagl-cards').innerHTML = keys.map(k=>{
+    const cdc   = DA.CDC[k];
+    const esclReason = ESCLUSI_ALLEGATO_A[k];
+    const isModena   = k==='MODENA';
+    const s     = getMeseStats(k, anno, mese);
+    const fasciaLabel = s.fascia ? `${cdc?.tipo||'CC'} ${s.fascia.min}${s.fascia.max<9999?'–'+s.fascia.max:'+'}` : '—';
+    const cov   = s.dovGiorno>0 ? (s.erGiorno/s.dovGiorno*100) : null;
+    const rCol  = cov===null ? '#64748b' : cov>=100?'#10b981':cov>=70?'#f59e0b':'#ef4444';
+    const delta = s.erGiorno - s.dovGiorno;
+    const isEscluso = !!esclReason;
+
+    let noteTag='';
+    if(esclReason)  noteTag=`<span class="note-tag note-escluso">⚫ ${esclReason}</span>`;
+    else if(isModena) noteTag=`<span class="note-tag note-multi">ℹ️ Aggregato 35 strutture CC+CAD</span>`;
+
+    const coverageVal = esclReason ? '—' :
+                        cov!=null ? Math.round(cov)+'%' : '—';
+
+    return `<div class="scagl-card ${isEscluso?'escluso':''}">
+      <div class="scagl-head">
+        <div>
+          <span class="cdc-pill ${cdc?.pill||''}">${cdc?.label||k}</span>
+          <div class="scagl-meta">${cdc?.tipo||'?'} · ${mese==='all'?'Media anno':'Mese'} ${anno}</div>
+          ${noteTag}
+        </div>
+        <div style="text-align:right">
+          <div class="scagl-cov" style="color:${rCol}">${coverageVal}</div>
+          <div class="scagl-meta">copertura</div>
+        </div>
+      </div>
+      <div class="scagl-row">
+        <span class="scagl-key">Ospiti medi/g</span>
+        <span class="scagl-val">${Math.round(s.ospMedi)}</span>
+      </div>
+      ${!esclReason && s.fascia ? `
+      <div class="scagl-row">
+        <span class="scagl-key">Scaglione Allegato A</span>
+        <span class="scagl-val" style="color:#a78bfa">${fasciaLabel}${isModena?' (aggregato)':''}</span>
+      </div>
+      <div class="scagl-row">
+        <span class="scagl-key">Ore dovute/giorno</span>
+        <span class="scagl-val" style="color:#a78bfa">${s.dovGiorno} h/g</span>
+      </div>` : ''}
+      <div class="scagl-row">
+        <span class="scagl-key">Ore erogate/giorno</span>
+        <span class="scagl-val" style="color:#10b981">${s.erGiorno.toFixed(1)} h/g</span>
+      </div>
+      ${!esclReason && s.fascia ? `
+      <div class="scagl-row">
+        <span class="scagl-key">Delta</span>
+        <span class="scagl-val" style="color:${delta>=0?'#10b981':'#ef4444'}">${delta>=0?'+':''}${delta.toFixed(1)} h/g</span>
+      </div>` : ''}
+      <div class="scagl-bar"><div class="scagl-fill" style="width:${Math.min(cov||0,120)}%;background:${rCol}"></div></div>
+    </div>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────────────────────
+// TABELLA MANSIONI — ore MENSILI + scostamento (logica corretta)
+// Dovute = fascia.m[mk] × gg_mese (Allegato A)
+// Erogate = dati reali Organico Mensile (Zoho) se disponibili,
+//           altrimenti stima da contratti annuali × peso mensile
+// Delta = Erogate − Dovute  (+ surplus, − deficit)
+// ─────────────────────────────────────────────────────────────
+function renderMansioniTable(){
+  const anno=getAnno(), mese=getMese();
+  const keys=getAllegatoKeys().filter(k=>!ESCLUSI_ALLEGATO_A[k]);
+  if(!keys.length){
+    document.getElementById('t-mans').innerHTML=
+      '<tbody><tr><td style="color:var(--text3);padding:16px">Nessun centro soggetto all\'Allegato A nel filtro corrente.</td></tr></tbody>';
+    return;
+  }
+
+  const unita = mese==='all' ? 'ore/anno' : 'ore/mese';
+
+  // Pre-calcola per capire se abbiamo dati reali per ciascun CdC
+  const mmCache = {};
+  keys.forEach(k => { mmCache[k] = getMansioniMensili(k, anno, mese); });
+
+  // ── INTESTAZIONE ───────────────────────────────────────────
+  const thead=`<thead><tr>
+    <th style="text-align:left">Mansione</th>
+    ${keys.map(k=>{
+      const mm = mmCache[k];
+      const cols = mm.hasMansData ? 3 : 2;
+      const badge = mm.usaOmReale
+        ? '<span style="font-size:8px;background:#065f46;color:#6ee7b7;padding:1px 4px;border-radius:3px;margin-left:3px" title="Dati reali Organico Mensile">REALE</span>'
+        : '';
+      return `<th colspan="${cols}" style="text-align:center">
+        <span class="cdc-pill ${DA.CDC[k]?.pill||''}" style="font-size:9px">${DA.CDC[k]?.label||k}</span>${badge}
+      </th>`;
+    }).join('')}
+  </tr>
+  <tr>
+    <th style="text-align:left;color:var(--text3);font-size:10px">${unita}</th>
+    ${keys.map(k=>{
+      const mm = mmCache[k];
+      const erLabel = mm.usaOmReale ? 'Erogate ✓' : 'Erogate ~';
+      const erTitle = mm.usaOmReale
+        ? 'Ore reali da Organico Mensile (Zoho Creator)'
+        : 'Stima da contratti annuali × peso mensile presenze';
+      return mm.hasMansData
+        ?`<th style="color:#a78bfa;font-size:10px" title="Allegato A × giorni mese">Dovute</th><th style="color:#10b981;font-size:10px" title="${erTitle}">${erLabel}</th><th style="color:#f59e0b;font-size:10px" title="Erogate − Dovute">Δ Delta</th>`
+        :'<th style="color:#a78bfa;font-size:10px">Dovute</th><th colspan="2" style="color:#64748b;font-size:10px;text-align:center">Dati N/D</th>';
+    }).join('')}
+  </tr></thead>`;
+
+  // ── RIGHE PER MANSIONE ─────────────────────────────────────
+  const rows = DA.MANS_KEYS.map((mk,i)=>{
+    const cells = keys.map(k=>{
+      const mm  = mmCache[k];  // usa cache già calcolata nell'intestazione
+      const dov = mm.dovute[mk]||0;
+      const er  = mm.erogate[mk];
+      const sco = mm.scostamento[mk];
+
+      const dovCell = `<td style="text-align:right;color:#a78bfa">${dov>0?DA.fmt(dov):'—'}</td>`;
+      if(!mm.hasMansData){
+        return dovCell+`<td colspan="2" style="text-align:center;color:#64748b;font-size:10px">N/D</td>`;
+      }
+
+      const erTxt  = er!=null&&er>0 ? DA.fmt(er) : '0';
+      const scoTxt = sco!=null ? (sco>=0?'+':'')+DA.fmt(sco) : '—';
+      // Delta: rosso = deficit (erogate < dovute), verde = surplus
+      const scoStyle = sco===null ? 'color:var(--text3)'
+                     : sco<0&&dov>0 ? 'color:#ef4444;font-weight:700'
+                     : 'color:#34d399;font-weight:600';
+      return `${dovCell}
+        <td style="text-align:right;color:#10b981">${erTxt}</td>
+        <td style="text-align:right;${scoStyle}">${scoTxt}</td>`;
+    }).join('');
+
+    return `<tr>
+      <td>
+        <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${DA.MANS_COLORS[i]};margin-right:6px;vertical-align:middle"></span>
+        ${DA.MANS_LABELS[i]}
+      </td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  // ── RIGA TOTALE ALLEGATO A ─────────────────────────────────
+  const totRow = `<tr style="background:rgba(59,130,246,.06);font-weight:700">
+    <td>Totale Allegato A</td>
+    ${keys.map(k=>{
+      const mm  = mmCache[k];
+      const dov = mm.dovTot;
+      const er  = mm.erMapped;
+      const sco = er!=null ? er-dov : null;
+      const dovCell=`<td style="text-align:right;color:#a78bfa">${dov>0?DA.fmt(dov):'—'}</td>`;
+      if(!mm.hasMansData)
+        return dovCell+`<td colspan="2" style="text-align:center;color:#64748b">N/D</td>`;
+      const scoStyle = sco<0?'color:#ef4444':'color:#34d399';
+      return `${dovCell}
+        <td style="text-align:right;color:#10b981">${DA.fmt(er||0)}</td>
+        <td style="text-align:right;${scoStyle}">${sco>=0?'+':''}${DA.fmt(sco||0)}</td>`;
+    }).join('')}
+  </tr>
+  <tr style="background:rgba(6,182,212,.04)">
+    <td style="font-size:10px;color:var(--text3)">Totale staff Zoho (tutte le mansioni)</td>
+    ${keys.map(k=>{
+      const mm=mmCache[k];
+      const cols = mm.hasMansData ? 3 : 2;
+      return `<td colspan="${cols}" style="text-align:right;font-size:11px;color:#06b6d4">${DA.fmt(mm.erTot)} h</td>`;
+    }).join('')}
+  </tr>`;
+
+  document.getElementById('t-mans').innerHTML=thead+'<tbody>'+rows+totRow+'</tbody>';
+}
+
+// ─────────────────────────────────────────────────────────────
+// ALLEGATO A REFERENCE CHARTS
+// ─────────────────────────────────────────────────────────────
+function renderAllegato(){
+  const ccF = DA.ALLEGATO_A_CC;
+  DA.mkChart('c-allegato-cc',{type:'bar',
+    data:{labels:ccF.map(f=>f.max>=9999||f.max>=999?`${f.min}+`:`${f.min}–${f.max}`),
+      datasets:[{label:'Ore/giorno totali',data:ccF.map(f=>f.ore_g),
+        backgroundColor:'#8b5cf6cc',borderColor:'#8b5cf6',borderWidth:1,borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{title:{display:true,text:'Fascia ospiti',color:'#546a87'}},
+              y:{title:{display:true,text:'Ore/giorno (centro)',color:'#546a87'},beginAtZero:true}}}
+  });
+  const cadF = DA.ALLEGATO_A_CAD;
+  DA.mkChart('c-allegato-cad',{type:'bar',
+    data:{labels:cadF.map(f=>f.max>=9999||f.max>=999?`${f.min}+`:`${f.min}–${f.max}`),
+      datasets:[{label:'Ore/giorno totali',data:cadF.map(f=>f.ore_g),
+        backgroundColor:'#ec4899cc',borderColor:'#ec4899',borderWidth:1,borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{title:{display:true,text:'Fascia ospiti',color:'#546a87'}},
+              y:{title:{display:true,text:'Ore/giorno (centro)',color:'#546a87'},beginAtZero:true}}}
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// CONFORMITÀ ISPETTIVA
+// ─────────────────────────────────────────────────────────────
+function renderConfCards(){
+  const allKeys=['PISA','RIETI','DROSSO','LORANZE','VICENZA','MODENA','VICO','CAMBO'];
+  document.getElementById('conf-cdc-cards').innerHTML=allKeys.map(k=>{
+    const cdc  = DA.CDC[k];
+    const confRaw = DA.CONFORMITA_CDC[k];
+    const hasData = confRaw!=null;
+    const conf = hasData ? confRaw : 0;
+    const col  = !hasData?'#64748b':conf>=75?'#10b981':conf>=50?'#f59e0b':'#ef4444';
+    const border = !hasData?'rgba(100,116,139,.2)':
+                   conf>=75?'rgba(16,185,129,.3)':conf>=50?'rgba(245,158,11,.3)':'rgba(239,68,68,.3)';
+    return `<div class="conf-card" style="border-color:${border};${!hasData?'opacity:.55':''}">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="cdc-pill ${cdc?.pill||''}">${cdc?.label||k}</span>
+        <span style="font-size:9px;color:var(--text3)">${hasData?'ispezioni Zoho':'N/D'}</span>
+      </div>
+      <div class="conf-val" style="color:${col}">${hasData?conf+'%':'<span style="font-size:18px;color:#64748b">N/D</span>'}</div>
+      <div class="conf-bar"><div class="conf-fill" style="width:${hasData?conf:0}%;background:${col}"></div></div>
+    </div>`;
+  }).join('');
+}
+
+function renderConformitaModena(){
+  const strutture = [...DA.CONFORMITA_STRUTTURE].sort((a,b)=>a.val-b.val);
+
+  // ── BAR LIST ──────────────────────────────────────────────
+  document.getElementById('conf-modena-bars').innerHTML=strutture.map(s=>{
+    const col=s.val>=75?'#10b981':s.val>=50?'#f59e0b':'#ef4444';
+    const tag = s.cdc.startsWith('CC')?'CC':'CAD';
+    return `<div style="margin-bottom:7px;padding:2px 8px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px">
+        <span style="color:var(--text2)">${s.nome}
+          <span style="font-size:9px;padding:1px 5px;border-radius:3px;margin-left:4px;
+            background:${tag==='CC'?'rgba(59,130,246,.12)':'rgba(16,185,129,.12)'};
+            color:${tag==='CC'?'#60a5fa':'#34d399'}">${tag}</span>
+        </span>
+        <span style="font-weight:700;color:${col}">${s.val}%</span>
+      </div>
+      <div class="conf-bar"><div class="conf-fill" style="width:${s.val}%;background:${col}"></div></div>
+    </div>`;
+  }).join('');
+
+  // ── DOUGHNUT ──────────────────────────────────────────────
+  const bins=[0,0,0,0];
+  strutture.forEach(s=>{ bins[s.val<25?0:s.val<50?1:s.val<75?2:3]++; });
+  DA.mkChart('c-conf-dist',{type:'doughnut',
+    data:{labels:['< 25% Critico','25-50% Scarso','50-75% Medio','≥ 75% Buono'],
+      datasets:[{data:bins,backgroundColor:['#ef4444cc','#f59e0bcc','#3b82f6cc','#10b981cc'],
+        borderColor:'#0d1526',borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'55%',
+      plugins:{legend:{position:'bottom',labels:{font:{size:11}}}}}
+  });
+
+  // ── CC vs CAD breakdown ───────────────────────────────────
+  const cc_s  = strutture.filter(s=>s.cdc.startsWith('CC'));
+  const cad_s = strutture.filter(s=>s.cdc.startsWith('CAD'));
+  const avg = arr => arr.length ? Math.round(arr.reduce((s,x)=>s+x.val,0)/arr.length) : 0;
+  const ccAvg=avg(cc_s), cadAvg=avg(cad_s);
+  document.getElementById('conf-cc-cad').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">
+      <div style="text-align:center;padding:8px;background:rgba(59,130,246,.07);border-radius:6px">
+        <div style="font-size:10px;color:#60a5fa;font-weight:700">CC — Collettivi</div>
+        <div style="font-size:22px;font-weight:800;color:${ccAvg>=50?'#f59e0b':'#ef4444'}">${ccAvg}%</div>
+        <div style="font-size:10px;color:var(--text3)">${cc_s.length} strutture</div>
+      </div>
+      <div style="text-align:center;padding:8px;background:rgba(16,185,129,.07);border-radius:6px">
+        <div style="font-size:10px;color:#34d399;font-weight:700">CAD — Diffusi</div>
+        <div style="font-size:22px;font-weight:800;color:${cadAvg>=50?'#f59e0b':'#ef4444'}">${cadAvg}%</div>
+        <div style="font-size:10px;color:var(--text3)">${cad_s.length} strutture</div>
+      </div>
+    </div>`;
+
+  // ── ANALISI ANOMALIE ──────────────────────────────────────
+  const media = Math.round(strutture.reduce((s,x)=>s+x.val,0)/strutture.length);
+  const critiche = strutture.filter(s=>s.val<50);
+  const buone    = strutture.filter(s=>s.val>=75);
+  const worst3   = strutture.slice(0,3); // già ordinato crescente
+
+  // Pattern per cdc (raggruppamento per cluster CAD/CC)
+  const byCdc = {};
+  strutture.forEach(s=>{
+    if(!byCdc[s.cdc]) byCdc[s.cdc]={nom:s.cdc,count:0,sum:0};
+    byCdc[s.cdc].count++; byCdc[s.cdc].sum+=s.val;
+  });
+  const cdcSorted = Object.values(byCdc).map(x=>({...x,avg:Math.round(x.sum/x.count)}))
+                            .sort((a,b)=>a.avg-b.avg);
+  const worstCdc  = cdcSorted.slice(0,2);
+  const bestCdc   = cdcSorted.slice(-1)[0];
+
+  // Genera sintesi dinamica
+  const sintesiTxt = [
+    critiche.length >= strutture.length*0.5
+      ? `⚠️ <strong>Criticità generalizzata</strong>: il ${Math.round(critiche.length/strutture.length*100)}% delle strutture (${critiche.length}/${strutture.length}) è sotto il 50%.`
+      : `🔶 <strong>${critiche.length} strutture</strong> su ${strutture.length} hanno indice inferiore al 50% (soglia di attenzione).`,
+    `La media globale è <strong>${media}%</strong> — ${media<50?'al di sotto':'vicina'} della soglia accettabile.`,
+    worstCdc.length
+      ? `I cluster più critici sono <strong>${worstCdc.map(c=>c.nom).join(', ')}</strong> (media ${worstCdc.map(c=>c.avg+'%').join(', ')}).`
+      : '',
+    worst3[0]?.val < 30
+      ? `Le strutture <strong>${worst3.slice(0,2).map(s=>s.nome).join(', ')}</strong> hanno indici sotto il 30% — indicatori di criticità strutturale o carenza procedurale documentata.`
+      : '',
+    buone.length
+      ? `${buone.length} strutture performano bene (≥75%): ${buone.map(s=>s.nome).join(', ')}.`
+      : 'Nessuna struttura raggiunge il 75% — si raccomanda un piano di miglioramento.',
+  ].filter(Boolean).join(' ');
+
+  // Possibili cause per strutture critiche
+  const causeSuggerite = [];
+  if(cad_s.length>0 && cadAvg < ccAvg-10) causeSuggerite.push('Le strutture CAD (appartamenti diffusi) tendono a score più bassi — probabile difficoltà nel garantire protocolli uniformi su unità abitative sparse.');
+  if(worst3.some(s=>s.nome.toLowerCase().includes('emilia')||s.nome.toLowerCase().includes('giardini'))) causeSuggerite.push('Strutture in aree specifiche (Emilia, Via Giardini) mostrano indici persistentemente bassi — possibile correlazione con vetustà degli immobili o alta rotazione degli ospiti.');
+  if(critiche.length > 5) causeSuggerite.push('Numero elevato di strutture critiche suggerisce una lacuna sistemica nella formazione degli operatori o nella documentazione delle procedure.');
+  causeSuggerite.push('Indici bassi possono derivare da: check-list ispezione compilate parzialmente, mancata registrazione interventi su Zoho, o effettivi gap procedurali (igiene, sicurezza, registro farmaci).');
+
+  document.getElementById('conf-sintesi').innerHTML=`
+    <div style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:var(--radius);padding:14px 16px">
+      <div style="font-size:13px;font-weight:700;color:#f87171;margin-bottom:8px">🔍 Sintesi Anomalie Conformità — MODENA IMMIGRAZIONE</div>
+      <p style="font-size:12px;color:var(--text);line-height:1.6;margin-bottom:8px">${sintesiTxt}</p>
+      <div style="font-size:11px;color:var(--text2);margin-top:8px">
+        <strong style="color:var(--text3)">Possibili cause degli indici bassi:</strong>
+        <ul style="margin:4px 0 0 16px;line-height:1.8">
+          ${causeSuggerite.map(c=>`<li>${c}</li>`).join('')}
+        </ul>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        ${worst3.map(s=>{
+          const col=s.val<25?'#ef4444':'#f59e0b';
+          return `<span style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);padding:3px 10px;border-radius:6px;font-size:11px;color:${col};font-weight:600">
+            ⚠️ ${s.nome}: ${s.val}%</span>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────
+// ORGANICO ALLEGATO A — Contrattualizzato vs Richiesto
+// Fonte: DA.ORGANICO_ALLEGATO (Storico Rapporto ATTIVO al 28/04/2026)
+// Mansioni Organico = 8 categorie Allegato A
+// ─────────────────────────────────────────────────────────────
+function renderOrganicoMensile(){
+  const alertEl   = document.getElementById('organico-alert');
+  const chartWrap = document.getElementById('organico-chart-wrap');
+  const tableWrap = document.getElementById('organico-table-wrap');
+
+  if(!DA.ORGANICO_ALLEGATO || !DA.MANS_ALLEGATO_A){
+    alertEl.innerHTML='<div class="alert alert-warn">⚠️ Dati Organico Allegato A non disponibili in data.js.</div>';
+    return;
+  }
+
+  // CdC selezionato
+  const cdcSel = getCdc();
+  const keysToShow = cdcSel === 'all' ? ALL_KEYS : [cdcSel];
+  const filteredKeys = keysToShow.filter(k => DA.ORGANICO_ALLEGATO[k]);
+
+  if(!filteredKeys.length){
+    alertEl.innerHTML='<div class="alert alert-warn">⚠️ Nessun dato Organico Allegato A per il centro selezionato.</div>';
+    return;
+  }
+
+  const isSingle = filteredKeys.length === 1;
+  const cdcLabel = isSingle ? (DA.CDC[filteredKeys[0]]?.label || filteredKeys[0]) : 'tutti i centri';
+  document.getElementById('organico-chart-title').textContent = cdcLabel;
+
+  alertEl.innerHTML = `<div class="alert alert-info">
+    ℹ️ Dati da <strong>Storico Rapporto</strong> Zoho Creator — contratti ATTIVI al 28/04/2026.
+    Ore richieste calcolate su <strong>ospiti medi 2025</strong> (Allegato A capitolato).
+    ${filteredKeys.length > 1 ? `Aggregato su <strong>${filteredKeys.length} centri</strong>.` : `Centro: <strong>${cdcLabel}</strong>`}
+  </div>`;
+
+  // Aggrega dati per categoria Allegato A (somma su CdC selezionati)
+  const CATS = DA.MANS_ALLEGATO_A;
+  const catColors = ['#3b82f6','#06b6d4','#8b5cf6','#ef4444','#10b981','#f59e0b','#ec4899','#6366f1'];
+
+  const aggPerCat = CATS.map((cat, ci) => {
+    let totN=0, totHmese=0, totRic=0, totRicRep=0;
+    filteredKeys.forEach(k => {
+      const d = DA.ORGANICO_ALLEGATO[k]?.[cat];
+      if(d){ totN+=d.n; totHmese+=d.h_mese; totRic+=d.ric_mese; totRicRep+=d.ric_rep; }
+    });
+    const delta = totHmese - totRic;
+    const cov   = totRic > 0 ? Math.round(totHmese/totRic*100) : (totHmese>0 ? 999 : null);
+    return { cat, n:totN, h_mese:totHmese, ric_mese:totRic, ric_rep:totRicRep, delta, cov, color:catColors[ci] };
+  });
+
+  // ── CHART: grouped bar — h/mese contrattualizzate vs richieste ────
+  const activeAgg = aggPerCat.filter(c => c.h_mese > 0 || c.ric_mese > 0);
+  DA.mkChart('c-organico-bar',{type:'bar',
+    data:{
+      labels: activeAgg.map(c=>c.cat),
+      datasets:[
+        { label:'Ore/mese Richieste (Allegato A · ospiti medi 2025)',
+          data: activeAgg.map(c=>c.ric_mese),
+          backgroundColor:'#8b5cf6aa', borderColor:'#8b5cf6', borderWidth:1, borderRadius:3 },
+        { label:'Ore/mese Contrattualizzate (Storico Rapporto ATTIVO)',
+          data: activeAgg.map(c=>c.h_mese),
+          backgroundColor:'#10b981aa', borderColor:'#10b981', borderWidth:1, borderRadius:3 },
+      ]
+    },
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'top'},
+        tooltip:{callbacks:{
+          label: ctx=>`${ctx.dataset.label}: ${DA.fmt(ctx.parsed.y)} h/mese`,
+          afterBody: items=>{
+            const i = items[0]?.dataIndex;
+            if(i==null) return [];
+            const c = activeAgg[i];
+            return [`Contratti ATTIVI: ${c.n}`, `Delta: ${c.delta>=0?'+':''}${DA.fmt(c.delta)} h/mese`];
+          }
+        }}
+      },
+      scales:{
+        x:{ticks:{font:{size:10}},grid:{display:false}},
+        y:{title:{display:true,text:'ore/mese',color:'#546a87'},beginAtZero:true,
+           ticks:{font:{size:10}}}
+      }
+    }
+  });
+
+  // ── TABLE: 8 categorie × colonne ─────────────────────────────
+  const thead = `<thead>
+    <tr>
+      <th style="text-align:left">Mansione Organico</th>
+      <th style="color:#64748b;text-align:right">Contratti</th>
+      <th style="color:#06b6d4;text-align:right">h/sett</th>
+      <th style="color:#10b981;text-align:right">h/mese contratt.</th>
+      <th style="color:#8b5cf6;text-align:right">h/mese richieste</th>
+      <th style="color:#f59e0b;text-align:right">Δ Scostamento</th>
+      <th style="color:#3b82f6;text-align:right">Copertura</th>
+    </tr>
+  </thead>`;
+
+  let totN=0, totHm=0, totRic=0;
+  const rows = aggPerCat.map((c,i) => {
+    totN += c.n; totHm += c.h_mese; totRic += c.ric_mese;
+    const scoStyle = c.delta < 0 && c.ric_mese > 0 ? 'color:#f87171;font-weight:700'
+                   : c.delta > 0 ? 'color:#34d399;font-weight:600'
+                   : 'color:var(--text3)';
+    const covStyle = c.cov === null ? 'color:var(--text3)'
+                   : c.cov >= 100  ? 'color:#34d399;font-weight:700'
+                   : c.cov >= 70   ? 'color:#fbbf24'
+                   : 'color:#f87171;font-weight:700';
+    const covTxt = c.cov===null?'—':c.cov===999?'>100%':c.cov+'%';
+    const repNote = c.ric_rep > 0 ? `<span style="font-size:9px;color:#f59e0b;margin-left:4px">+${DA.fmt(c.ric_rep)}h rep.</span>` : '';
+    return `<tr>
+      <td>
+        <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${c.color};margin-right:6px;vertical-align:middle"></span>
+        ${c.cat}
+      </td>
+      <td style="text-align:right;color:#94a3b8">${c.n > 0 ? c.n : '—'}</td>
+      <td style="text-align:right;color:#06b6d4">${c.h_mese>0?(c.h_mese*12/52).toFixed(1):'—'}</td>
+      <td style="text-align:right;color:#10b981;font-weight:600">${c.h_mese>0?DA.fmt(c.h_mese):'—'}</td>
+      <td style="text-align:right;color:#a78bfa">${c.ric_mese>0?DA.fmt(c.ric_mese):'—'}${repNote}</td>
+      <td style="text-align:right;${scoStyle}">${c.ric_mese>0?(c.delta>=0?'+':'')+DA.fmt(c.delta):'—'}</td>
+      <td style="text-align:right;${covStyle}">${covTxt}</td>
+    </tr>`;
+  }).join('');
+
+  const totDelta = totHm - totRic;
+  const totCov   = totRic > 0 ? Math.round(totHm/totRic*100) : null;
+  const tScoStyle = totDelta<0?'color:#f87171;font-weight:700':'color:#34d399;font-weight:700';
+  const tCovStyle = totCov==null?'color:var(--text3)':totCov>=100?'color:#34d399;font-weight:700':totCov>=70?'color:#fbbf24;font-weight:700':'color:#f87171;font-weight:700';
+  const totRow = `<tr style="background:rgba(59,130,246,.06);font-weight:700">
+    <td>Totale Allegato A</td>
+    <td style="text-align:right;color:#94a3b8">${totN}</td>
+    <td style="text-align:right;color:#06b6d4">—</td>
+    <td style="text-align:right;color:#10b981">${DA.fmt(totHm)}</td>
+    <td style="text-align:right;color:#a78bfa">${DA.fmt(totRic)}</td>
+    <td style="text-align:right;${tScoStyle}">${totDelta>=0?'+':''}${DA.fmt(totDelta)}</td>
+    <td style="text-align:right;${tCovStyle}">${totCov!=null?totCov+'%':'—'}</td>
+  </tr>`;
+
+  document.getElementById('t-organico').innerHTML = thead+'<tbody>'+rows+totRow+'</tbody>';
+}
+
+// ─────────────────────────────────────────────────────────────
+// MAIN
+// ─────────────────────────────────────────────────────────────
+function _showMeseCorrenteBanner(){
+  const now = new Date();
+  const selMese = parseInt(document.getElementById('f-mese')?.value ?? '-1');
+  const selAnno = parseInt(document.getElementById('f-anno')?.value ?? '0');
+  const banner = document.getElementById('banner-mese-corrente');
+  if(!banner) return;
+  if(selMese === now.getMonth() && selAnno === now.getFullYear()){
+    const MESI = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                  'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+    banner.style.display = 'block';
+    banner.innerHTML = `⚠️ <strong>${MESI[selMese]} ${selAnno} è il mese corrente</strong> —
+      le ore vengono chiuse ai primi del mese successivo. I dati mostrati sono <em>parziali/non definitivi</em>.`;
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+function renderAll(){
+  DA.chartDefaults(Chart);
+  _showMeseCorrenteBanner();
+  renderContext();
+  renderKpi();
+  renderCdcBar();
+  renderTrend();
+  renderScaglioneCards();
+  renderMansioniTable();
+  renderOrganicoMensile();
+  renderAllegato();
+  renderConfCards();
+  renderConformitaModena();
+}
+
+// Default: Media annuale 2025 (dati ore più affidabili e completi)
+document.addEventListener('DOMContentLoaded',()=>{
+  setToday(); // mostra 2025/all — dati completi
+});
+</script>
+</body>
+</html>

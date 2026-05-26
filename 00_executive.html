@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="athena-static-only" content="true"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Direzionale Executive — Athena</title>
+<link rel="stylesheet" href="shared/style.css?v=20260525-1800">
+<style>
+/* ── EXECUTIVE LAYOUT ──────────────────────────────────────── */
+.exec-hero {
+  background:linear-gradient(135deg,rgba(99,102,241,.18) 0%,rgba(59,130,246,.10) 50%,rgba(16,185,129,.06) 100%);
+  border:1px solid rgba(99,102,241,.35); border-radius:14px;
+  padding:22px 26px; margin-bottom:18px;
+}
+.exec-hero h1 { font-size:24px; font-weight:900; margin-bottom:4px; }
+.exec-hero h1 .tag { font-size:11px; background:#10b981; color:#fff; padding:3px 9px; border-radius:6px; vertical-align:middle; margin-left:10px; }
+.exec-hero p { color:var(--text2); font-size:12.5px; }
+.exec-kpi-grid {
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:18px;
+}
+.exec-kpi-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:16px 18px; position:relative; overflow:hidden;
+  transition:transform .15s, border-color .15s;
+}
+.exec-kpi-card:hover { transform:translateY(-2px); border-color:var(--border2); }
+.exec-kpi-card::before {
+  content:''; position:absolute; top:0; left:0; bottom:0; width:4px;
+}
+.exec-kpi-icon { font-size:22px; opacity:.85; }
+.exec-kpi-val { font-size:26px; font-weight:900; margin-top:6px; line-height:1; color:var(--text1); }
+.exec-kpi-sub { font-size:10.5px; color:var(--text3); margin-top:4px; text-transform:uppercase; letter-spacing:.04em; }
+.exec-kpi-delta { font-size:10px; font-weight:700; margin-top:6px; }
+.kpi-blue::before  { background:linear-gradient(180deg,#3b82f6,#1e40af); }
+.kpi-green::before { background:linear-gradient(180deg,#10b981,#047857); }
+.kpi-red::before   { background:linear-gradient(180deg,#ef4444,#991b1b); }
+.kpi-amber::before { background:linear-gradient(180deg,#f59e0b,#92400e); }
+.kpi-violet::before{ background:linear-gradient(180deg,#8b5cf6,#5b21b6); }
+.kpi-cyan::before  { background:linear-gradient(180deg,#06b6d4,#0e7490); }
+
+/* alert strip */
+.exec-alerts { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px; }
+.exec-alert {
+  flex:1 1 240px; padding:10px 14px; border-radius:10px;
+  display:flex; align-items:center; gap:10px; font-size:11.5px;
+  border-left:3px solid;
+}
+.exec-alert.red    { background:rgba(239,68,68,.08); border-color:#ef4444; }
+.exec-alert.amber  { background:rgba(245,158,11,.08); border-color:#f59e0b; }
+.exec-alert.green  { background:rgba(16,185,129,.08); border-color:#10b981; }
+.exec-alert.icon   { font-size:18px; flex-shrink:0; }
+
+/* CdC table */
+.exec-table { width:100%; border-collapse:collapse; font-size:11.5px; }
+.exec-table th {
+  background:var(--surface2); color:var(--text2); font-weight:700;
+  text-transform:uppercase; letter-spacing:.04em; font-size:10px;
+  padding:9px 8px; text-align:right; border-bottom:2px solid var(--border2);
+}
+.exec-table th:first-child { text-align:left; }
+.exec-table td { padding:8px; text-align:right; border-bottom:1px solid var(--border); }
+.exec-table td:first-child { text-align:left; font-weight:600; }
+.exec-table tr:hover td { background:rgba(255,255,255,.02); }
+.exec-table .health {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:18px; height:18px; border-radius:50%; font-size:10px; font-weight:800;
+}
+.health-ok    { background:rgba(16,185,129,.2); color:#10b981; }
+.health-warn  { background:rgba(245,158,11,.2); color:#f59e0b; }
+.health-bad   { background:rgba(239,68,68,.2);  color:#ef4444; }
+
+/* Sparkline mini */
+.spark { display:inline-block; width:80px; height:18px; vertical-align:middle; }
+
+/* Sezioni */
+.exec-section-title {
+  font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.07em;
+  color:var(--text2); margin:24px 0 12px; padding-bottom:6px;
+  border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:8px;
+}
+.exec-section-title .icon { font-size:14px; }
+.exec-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+@media (max-width:900px) { .exec-grid-2 { grid-template-columns:1fr; } }
+
+/* Chart card */
+.chart-card-mini {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; padding:14px;
+}
+.chart-card-mini-title {
+  font-size:11.5px; font-weight:700; margin-bottom:8px; display:flex; gap:8px;
+}
+.chart-wrap-mini { height:200px; position:relative; }
+</style>
+</head>
+<body data-page="exec">
+<div id="topbar" class="topbar"></div>
+<div id="data-mode-bar" class="data-bar static mb-16"><span class="dot"></span>Caricamento dati...</div>
+
+<div class="main">
+
+  <!-- HERO -->
+  <div class="exec-hero">
+    <h1>🎯 Direzionale Executive <span class="tag">VIEW COO</span></h1>
+    <p>Cruscotto sintetico per la direzione · Cooperativa Angolo · Snapshot in 1 schermata</p>
+  </div>
+
+  <!-- KPI TOP-DOWN (6 box) -->
+  <div class="exec-kpi-grid" id="exec-kpis"></div>
+
+  <!-- ALERTS STRIP -->
+  <div class="exec-alerts" id="exec-alerts"></div>
+
+  <!-- TABELLA CdC SINTETICA -->
+  <div class="exec-section-title">
+    <span class="icon">🏢</span>
+    Sintesi per Centro di Costo
+    <span style="margin-left:auto;font-size:10px;color:var(--text3);font-weight:500;text-transform:none">
+      Riempimento · Retta · Costo · Margine · Sparkline presenze 2025
+    </span>
+  </div>
+  <div class="chart-card-mini" style="overflow-x:auto">
+    <table class="exec-table" id="exec-cdc-table"></table>
+  </div>
+
+  <!-- 2 GRAFICI: trend presenze + scostamento capitolato -->
+  <div class="exec-section-title">
+    <span class="icon">📊</span> Vista d'insieme
+  </div>
+  <div class="exec-grid-2">
+    <div class="chart-card-mini">
+      <div class="chart-card-mini-title">
+        <span class="dot" style="background:#3b82f6"></span>Trend presenze totali cooperativa 2025
+      </div>
+      <div class="chart-wrap-mini"><canvas id="c-trend-pres"></canvas></div>
+    </div>
+    <div class="chart-card-mini">
+      <div class="chart-card-mini-title">
+        <span class="dot" style="background:#ef4444"></span>Scostamento Costo Reale vs Capitolato (€/prodie)
+      </div>
+      <div class="chart-wrap-mini"><canvas id="c-scost-cap"></canvas></div>
+    </div>
+  </div>
+
+  <div class="exec-grid-2" style="margin-top:14px">
+    <div class="chart-card-mini">
+      <div class="chart-card-mini-title">
+        <span class="dot" style="background:#f59e0b"></span>Composizione costi cooperativa
+      </div>
+      <div class="chart-wrap-mini"><canvas id="c-comp-costi"></canvas></div>
+    </div>
+    <div class="chart-card-mini">
+      <div class="chart-card-mini-title">
+        <span class="dot" style="background:#10b981"></span>Riempimento posti per CdC (% capacità)
+      </div>
+      <div class="chart-wrap-mini"><canvas id="c-riempimento"></canvas></div>
+    </div>
+  </div>
+
+  <div class="alert alert-info" style="margin-top:18px;font-size:11px">
+    ℹ️ Direzionale Executive aggrega le metriche più importanti delle dashboard di dettaglio.
+    Click su ciascun CdC nella tabella per andare alla scheda di dettaglio.
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<script src="shared/data.js?v=20260525-1800"></script>
+<script src="shared/filters.js?v=20260525-1800"></script>
+<script src="shared/live.js?v=20260525-1800"></script>
+<script src="shared/nav.js?v=20260525-1800"></script>
+<script>
+function renderHero(){
+  // Aggregati cooperativa
+  const cdcKeys = DA.CDC_KEYS;
+  let totFatt=0, totCosti=0, totPres=0, totCentri=0, totPosti=0, totRedd=0;
+  cdcKeys.forEach(k => {
+    const a = DA.ANNO2025[k] || {};
+    totFatt   += a.f || 0;
+    totCosti  += a.c || 0;
+    totRedd   += a.r || 0;
+    totPres   += DA.PRESENZE_EST[k] || 0;
+    totCentri += DA.getNumeroCentri(k);
+    totPosti  += DA.getPostiTotali(k);
+  });
+  const margPct = totFatt > 0 ? (totRedd / totFatt * 100) : 0;
+  const ospMediCoop = totPosti > 0 ? Math.round(totPres / 365) : 0;
+  const riempCoop = totPosti > 0 ? (ospMediCoop / totPosti * 100) : 0;
+  const prodieMedio = totPres > 0 ? (totCosti / totPres) : 0;
+
+  // VICO: somma perdite
+  const cdcPerdita = cdcKeys.filter(k => (DA.MARGINE_PRODIE[k] || 0) < 0).length;
+
+  const kpis = [
+    {icon:'🏢',val:totCentri,                       sub:`Centri attivi (${totPosti} posti)`, col:'kpi-blue'},
+    {icon:'👥',val:DA.fmtK(totPres),                sub:'Presenze totali 2025',              col:'kpi-cyan'},
+    {icon:'💶',val:'€'+DA.fmtK(totFatt),             sub:'Fatturato 2025',                    col:'kpi-green'},
+    {icon:'🧾',val:'€'+prodieMedio.toFixed(2),       sub:'Costo medio €/prodie',              col:'kpi-amber'},
+    {icon:margPct>=0?'📈':'📉',val:margPct.toFixed(1)+'%', sub:'Margine % su fatturato',  col:margPct>=0?'kpi-green':'kpi-red'},
+    {icon:'🎯',val:riempCoop.toFixed(0)+'%',         sub:'Riempimento cooperativa',           col:riempCoop>=85?'kpi-green':riempCoop>=60?'kpi-amber':'kpi-red'},
+  ];
+  document.getElementById('exec-kpis').innerHTML = kpis.map(k => `
+    <div class="exec-kpi-card ${k.col}">
+      <div class="exec-kpi-icon">${k.icon}</div>
+      <div class="exec-kpi-val">${k.val}</div>
+      <div class="exec-kpi-sub">${k.sub}</div>
+    </div>`).join('');
+}
+
+function renderAlerts(){
+  const alerts = [];
+  // VICO perdita
+  if (DA.MARGINE_PRODIE.VICO < 0) {
+    alerts.push({sev:'red', icon:'🚨', msg:`VICO in perdita strutturale: <strong>−€${Math.abs(DA.MARGINE_PRODIE.VICO).toFixed(2)}/prodie</strong>`});
+  }
+  // CAMBO sottoutilizzo
+  const riempCambo = DA.STIMA_CAP_PRODIE.CAMBO?._riempimento || 0;
+  if (riempCambo < 50) {
+    alerts.push({sev:'amber', icon:'📉', msg:`CAMBO sottoutilizzato: <strong>${riempCambo}%</strong> riempimento (attivo da Ago 2025)`});
+  }
+  // CdC sopra capitolato
+  const overCap = DA.CDC_KEYS.filter(k => {
+    const real = DA.ANNO2025[k]?.prodie || 0;
+    const cap  = DA.STIMA_CAP_PRODIE[k]?.TOTALE || 0;
+    return real > 0 && cap > 0 && real > cap;
+  });
+  if (overCap.length) {
+    alerts.push({sev:'amber', icon:'📋', msg:`${overCap.length}/${DA.CDC_KEYS.length} CdC sopra capitolato: <strong>${overCap.join(', ')}</strong>`});
+  }
+  // CdC in utile
+  const inUtile = DA.CDC_KEYS.filter(k => (DA.MARGINE_PRODIE[k] || 0) > 0).length;
+  alerts.push({sev:'green', icon:'✅', msg:`<strong>${inUtile}/${DA.CDC_KEYS.length}</strong> CdC con margine positivo`});
+
+  document.getElementById('exec-alerts').innerHTML = alerts.map(a => `
+    <div class="exec-alert ${a.sev}">
+      <span class="exec-alert-icon">${a.icon}</span>
+      <span>${a.msg}</span>
+    </div>`).join('');
+}
+
+function renderCdcTable(){
+  const rows = DA.CDC_KEYS.map(k => {
+    const cdc = DA.CDC[k];
+    const a   = DA.ANNO2025[k] || {};
+    const r   = DA.RETTE_CDC[k] || 0;
+    const c   = a.prodie || 0;
+    const m   = DA.MARGINE_PRODIE[k];
+    const pres= DA.PRESENZE_EST[k] || 0;
+    const posti = DA.getPostiTotali(k);
+    const ncentri = DA.getNumeroCentri(k);
+    const ospMed = DA.OSPITI_MEDI[k] || 0;
+    const riemp = posti > 0 ? (ospMed / posti * 100) : 0;
+    let health = 'health-ok';
+    if (m != null && m < 0) health = 'health-bad';
+    else if (m != null && m < 3) health = 'health-warn';
+    else if (riemp < 60) health = 'health-warn';
+    return { k, cdc, a, r, c, m, pres, posti, ncentri, ospMed, riemp, health };
+  });
+  rows.sort((a,b) => (b.a.f || 0) - (a.a.f || 0));
+
+  const head = `<thead><tr>
+    <th>Centro</th>
+    <th>Tipo</th>
+    <th>Centri</th>
+    <th>Posti</th>
+    <th>Osp. med</th>
+    <th>Riemp%</th>
+    <th>Retta</th>
+    <th>Costo</th>
+    <th>Margine</th>
+    <th>Fatt 2025</th>
+    <th></th>
+  </tr></thead>`;
+  const body = rows.map(r => {
+    const mStr = r.m == null ? '—' : (r.m >= 0 ? '+' : '') + '€' + r.m.toFixed(2);
+    const mCls = r.m == null ? '' : (r.m >= 0 ? 'health-ok' : 'health-bad');
+    return `<tr>
+      <td><span class="cdc-pill ${r.cdc?.pill||''}">${r.cdc?.label||r.k}</span></td>
+      <td>${r.cdc?.tipo||'—'}</td>
+      <td>${r.ncentri}</td>
+      <td>${r.posti}</td>
+      <td>${r.ospMed}</td>
+      <td><strong style="color:${r.riemp>=85?'#10b981':r.riemp>=60?'#f59e0b':'#ef4444'}">${r.riemp.toFixed(0)}%</strong></td>
+      <td>€${r.r.toFixed(2)}</td>
+      <td>€${r.c.toFixed(2)}</td>
+      <td style="color:${r.m>=0?'#10b981':'#ef4444'};font-weight:700">${mStr}</td>
+      <td>€${DA.fmtK(r.a.f||0)}</td>
+      <td><span class="health ${r.health}">${r.health==='health-ok'?'✓':r.health==='health-warn'?'!':'✕'}</span></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('exec-cdc-table').innerHTML = head + '<tbody>' + body + '</tbody>';
+}
+
+function renderTrendPres(){
+  // Somma presenze totali cooperativa per mese
+  const totM = DA.MESI_LABEL.map((_,i) =>
+    DA.CDC_KEYS.reduce((s,k) => s + (DA.PRESENZE_M[k]?.[i]||0), 0)
+  );
+  DA.mkChart('c-trend-pres', {
+    type:'line',
+    data:{labels:DA.MESI_LABEL, datasets:[{
+      label:'Presenze totali',
+      data:totM,
+      borderColor:'#3b82f6', backgroundColor:'rgba(59,130,246,.10)',
+      borderWidth:2, pointRadius:3, fill:true, tension:.3
+    }]},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{y:{ticks:{callback:v => DA.fmtK(v)}}}}
+  });
+}
+
+function renderScostCap(){
+  const data = DA.CDC_KEYS.map(k => {
+    const r = DA.ANNO2025[k]?.prodie || 0;
+    const c = DA.STIMA_CAP_PRODIE[k]?.TOTALE || 0;
+    return { k, label:DA.CDC[k]?.label||k, delta: r - c };
+  }).filter(d => d.delta !== 0).sort((a,b) => b.delta - a.delta);
+
+  DA.mkChart('c-scost-cap', {
+    type:'bar',
+    data:{labels:data.map(d => d.label), datasets:[{
+      label:'Δ €/prodie',
+      data:data.map(d => +d.delta.toFixed(2)),
+      backgroundColor:data.map(d => d.delta>0?'#ef4444cc':'#10b981cc'),
+      borderColor:    data.map(d => d.delta>0?'#ef4444':'#10b981'),
+      borderWidth:1, borderRadius:4
+    }]},
+    options:{indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}}, scales:{y:{grid:{display:false}}}}
+  });
+}
+
+function renderCompCosti(){
+  const CATS = [
+    {k:'PERSONALE',c:'#3b82f6'}, {k:'VITTO',c:'#10b981'},
+    {k:'STRUTTURA',c:'#8b5cf6'}, {k:'UTENZE',c:'#f59e0b'},
+    {k:'MANUTENZIONI',c:'#ec4899'},{k:'CONSULENTI_ESTERNI',c:'#06b6d4'},
+    {k:'PRODOTTI_IGIENE',c:'#14b8a6'},{k:'ALTRO',c:'#94a3b8'},
+  ];
+  const totals = CATS.map(cat => ({
+    label: cat.k.replace('_',' '),
+    color: cat.c,
+    tot: DA.CDC_KEYS.reduce((s,k) => s + ((DA.COSTI_CAT[k]||{})[cat.k]||0), 0)
+  })).filter(c => c.tot > 0);
+  totals.sort((a,b) => b.tot - a.tot);
+
+  DA.mkChart('c-comp-costi', {
+    type:'doughnut',
+    data:{labels:totals.map(t => t.label), datasets:[{
+      data:totals.map(t => t.tot),
+      backgroundColor:totals.map(t => t.color),
+      borderWidth:1
+    }]},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'right', labels:{font:{size:10}}}}}
+  });
+}
+
+function renderRiempimento(){
+  const data = DA.CDC_KEYS.map(k => {
+    const posti = DA.getPostiTotali(k);
+    const osp = DA.OSPITI_MEDI[k] || 0;
+    return { k, label:DA.CDC[k]?.label||k, pct: posti>0?(osp/posti*100):0 };
+  }).sort((a,b) => b.pct - a.pct);
+
+  DA.mkChart('c-riempimento', {
+    type:'bar',
+    data:{labels:data.map(d => d.label), datasets:[{
+      label:'Riempimento %',
+      data:data.map(d => +d.pct.toFixed(1)),
+      backgroundColor:data.map(d => d.pct>=85?'#10b981cc':d.pct>=60?'#f59e0bcc':'#ef4444cc'),
+      borderColor:    data.map(d => d.pct>=85?'#10b981':d.pct>=60?'#f59e0b':'#ef4444'),
+      borderWidth:1, borderRadius:4
+    }]},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{label:ctx => ctx.parsed.y.toFixed(1)+'% riempimento'}}},
+      scales:{y:{max:120, title:{display:true,text:'%',color:'#546a87'}},
+              x:{ticks:{font:{size:9}}}}}
+  });
+}
+
+function renderAll(){
+  DA.chartDefaults(Chart);
+  renderHero();
+  renderAlerts();
+  renderCdcTable();
+  renderTrendPres();
+  renderScostCap();
+  renderCompCosti();
+  renderRiempimento();
+}
+document.addEventListener('DOMContentLoaded', renderAll);
+</script>
+</body>
+</html>

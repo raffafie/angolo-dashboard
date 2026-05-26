@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="athena-static-only" content="true"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Costo per Prodie — Dashboard Analytics</title>
+<link rel="stylesheet" href="shared/style.css?v=20260525-1800">
+<style>
+.prodie-table { width:100%; border-collapse:collapse; font-size:12px; }
+.prodie-table th {
+  background:var(--surface2); color:var(--text2);
+  font-size:10px; font-weight:700; text-transform:uppercase;
+  padding:8px 10px; text-align:right; border-bottom:2px solid var(--border2);
+}
+.prodie-table th:first-child { text-align:left; }
+.prodie-table td {
+  padding:7px 10px; text-align:right;
+  border-bottom:1px solid var(--border); font-size:11px;
+}
+.prodie-table td:first-child { text-align:left; font-weight:600; }
+.prodie-table tr:last-child td { border-bottom:none; font-weight:700; background:rgba(59,130,246,.05); }
+.prodie-table tr:hover td { background:rgba(255,255,255,.02); }
+.val-over  { color:#f87171; font-weight:700; }
+.val-under { color:#34d399; }
+.margine-pos { color:#34d399; font-weight:700; }
+.margine-neg { color:#f87171; font-weight:700; }
+.cat-breakdown {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px;
+}
+.cat-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius); padding:14px 16px;
+}
+.cat-card-title {
+  font-size:12px; font-weight:700; margin-bottom:12px;
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+}
+.cat-row {
+  display:flex; align-items:center; gap:8px;
+  font-size:11px; margin-bottom:6px;
+}
+.cat-row-label { flex:0 0 120px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cat-bar-wrap  { flex:1; height:6px; background:var(--surface2); border-radius:3px; overflow:hidden; }
+.cat-bar-fill  { height:100%; border-radius:3px; }
+.cat-val       { flex:0 0 50px; text-align:right; font-weight:600; font-size:11px; }
+.cat-stima     { flex:0 0 50px; text-align:right; color:var(--text3); font-size:10px; }
+.cat-delta     { flex:0 0 44px; text-align:right; font-size:10px; font-weight:700; }
+.alert-critical {
+  background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.35);
+  border-radius:var(--radius); padding:14px 16px; margin:0 0 16px;
+  font-size:13px; line-height:1.6;
+}
+.alert-critical strong { color:#f87171; }
+</style>
+</head>
+<body data-page="cap">
+<div id="topbar" class="topbar"></div>
+<div id="data-mode-bar" class="data-bar static mb-16"><span class="dot"></span>Caricamento dati...</div>
+
+<div class="main">
+
+  <div class="page-header">
+    <h1><span class="icon">📋</span> Costo per Prodie — Controllo di Gestione</h1>
+    <p>Retta Prefettura reale vs Costo reale per giornata di presenza · Breakdown per categoria · Analisi margini per CdC — Fonte: Zoho Analytics</p>
+  </div>
+
+  <!-- ALERT VICO -->
+  <div class="alert-critical">
+    🚨 <strong>VICO-VALCHIUSA: PERDITA</strong> — Costo reale <strong>€74.60/prodie</strong> vs retta contrattuale <strong>€57.00/prodie</strong>
+    = margine <strong>–€17.60/prodie (–31%)</strong>. Il dato Zoho Redditività Feb–Giu 2025 è incompleto (fatture mancanti); retta corretta da fonte contrattuale. Necessaria verifica e re-inserimento fatture in Zoho Creator.
+  </div>
+
+  <!-- FILTRI -->
+  <div class="filters">
+    <label>Anno:</label>
+    <select id="f-anno" onchange="renderAll()">
+      <option value="2025">2025 (consuntivo)</option>
+      <option value="2026">2026 (Gen-Feb reale + Mar-Apr forecast)</option>
+    </select>
+    <label>Centro:</label>
+    <select id="f-cdc" onchange="renderAll()">
+      <option value="all">Tutti i centri</option>
+      <option value="PISA">CAS PISA</option>
+      <option value="RIETI">CAD RIETI</option>
+      <option value="DROSSO">DROSSO</option>
+      <option value="LORANZE">LORANZÈ</option>
+      <option value="VICENZA">VICENZA</option>
+      <option value="MODENA">MODENA IMMIGRAZIONE</option>
+      <option value="VICO">VICO-VALCHIUSA</option>
+      <option value="CAMBO">CAMPOBASSO</option>
+    </select>
+    <button class="btn-apply" onclick="renderAll()">↻ Aggiorna</button>
+  </div>
+
+  <!-- KPI HERO — 6 box principali -->
+  <div class="kpi-grid" id="kpi-cap"></div>
+
+  <!-- ❶ SCOSTAMENTO CAPITOLATO vs REALE — ranking ordinato (waterfall-like) -->
+  <div class="chart-card" style="margin-bottom:14px">
+    <div class="chart-title">
+      <span class="dot" style="background:#ef4444"></span>
+      Scostamento Costo Reale vs Capitolato (€/prodie) — ordinato da peggiore a migliore
+      <span style="margin-left:auto;font-size:10px;color:var(--text3);font-weight:400">
+        🔴 sopra capitolato (inefficiente) · 🟢 sotto capitolato (efficiente)
+      </span>
+    </div>
+    <div class="chart-wrap" style="height:280px"><canvas id="c-scostamento"></canvas></div>
+  </div>
+
+  <!-- ❷ HEATMAP CATEGORIE × CdC — vista d'insieme -->
+  <div class="chart-card" style="margin-bottom:14px">
+    <div class="chart-title">
+      <span class="dot" style="background:#8b5cf6"></span>
+      Heatmap Scostamento per Categoria (Reale − Capitolato, €/prodie)
+      <span style="margin-left:auto;font-size:10px;color:var(--text3);font-weight:400">
+        scala −€5 (verde) → 0 (giallo) → +€5 (rosso)
+      </span>
+    </div>
+    <div id="heatmap-categorie" style="padding:6px 0"></div>
+  </div>
+
+  <!-- ❸ GRAFICI ORIGINALI -->
+  <div class="chart-grid cols-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#3b82f6"></span>Retta Prefettura vs Costo Reale (€/prodie)</div>
+      <div class="chart-wrap" style="height:280px"><canvas id="c-retta-costo"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#10b981"></span>Margine per Prodie — verde=utile · rosso=perdita</div>
+      <div class="chart-wrap" style="height:280px"><canvas id="c-margine"></canvas></div>
+    </div>
+  </div>
+
+  <!-- COMPOSIZIONE COSTI REALI PER PRODIE -->
+  <div class="chart-grid cols-full">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#f59e0b"></span>Composizione Costi Reali per Prodie per CdC (€/giornata di presenza)</div>
+      <div class="chart-wrap" style="height:300px"><canvas id="c-comp-prodie"></canvas></div>
+    </div>
+  </div>
+
+  <!-- STIMA CAPITOLATO vs REALE PER CATEGORIA -->
+  <div class="chart-grid cols-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#8b5cf6"></span>Personale: Stima cap. vs Reale (€/prodie)</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-pers-comp"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#06b6d4"></span>Vitto: Stima cap. vs Reale (€/prodie)</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-vitto-comp"></canvas></div>
+    </div>
+  </div>
+
+  <div class="chart-grid cols-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#ec4899"></span>Struttura: Stima cap. vs Reale (€/prodie)</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-strutt-comp"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#f97316"></span>Manutenzioni: Stima cap. vs Reale (€/prodie)</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-manut-comp"></canvas></div>
+    </div>
+  </div>
+
+  <!-- TABELLA DETTAGLIO -->
+  <div class="section-title">📊 Retta vs Costo per Prodie — Dettaglio per Categoria (€/prodie)</div>
+  <div class="chart-card" style="overflow-x:auto">
+    <table class="prodie-table" id="t-prodie"></table>
+  </div>
+
+  <!-- 📋 ALLEGATO A — Dotazione minima per fascia (Zoho Dotazione_Minima_Cas) -->
+  <div class="section-title">📋 Allegato A · Dotazione minima ore — fascia dinamica per CdC selezionato</div>
+  <div class="chart-card" style="margin-bottom:16px;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+      <span style="font-size:11px;color:var(--text3);">Mostra dotazione per:</span>
+      <select id="all-a-cdc" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text1);"></select>
+      <span id="all-a-meta" style="font-size:10.5px;color:var(--text2);"></span>
+    </div>
+    <div id="allegato-a-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">
+      <!-- riempito via JS -->
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-top:10px;">
+      Fonte: Zoho Creator <code>Dotazione_Minima_Cas</code> · 16 mappature (8 categorie × CC/CAD).
+      Override locale: <strong>PSICOLOGO</strong>, <strong>INSEGNANTE</strong>, <strong>ANIMATORE</strong>, <strong>ADDETTO COMUNICAZIONE SOCIALE</strong>, <strong>ADDETTO ASSISTENZA NON QUALIF.</strong> → categoria <em>OPERATORE SOCIALE</em>.
+    </div>
+  </div>
+
+  <!-- BREAKDOWN CARDS -->
+  <div class="section-title">🔍 Scostamento Stima Capitolato vs Reale — per CdC</div>
+  <div class="cat-breakdown" id="breakdown-cards"></div>
+
+  <div class="alert alert-info" style="margin-top:16px">
+    ℹ️ <strong>Nota metodologica:</strong> Rette = fatturato Zoho ÷ presenze (calcolo interno). Costi da "Composizione Costi" Pivot Zoho.
+    Stima capitolato = % DM Ministero Interno × retta reale del CdC. 🟢 verde = sotto stima (efficiente) · 🔴 rosso = sopra stima.
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<script src="shared/data.js?v=20260525-1800"></script>
+<script src="shared/filters.js?v=20260525-1800"></script>
+<script src="shared/live.js?v=20260525-1800"></script>
+<script src="shared/nav.js?v=20260525-1800"></script>
+<script>
+const CAP_KEYS = ['PISA','RIETI','DROSSO','LORANZE','VICENZA','MODENA','VICO','CAMBO'];
+
+function getKeys(){
+  const v = document.getElementById('f-cdc')?.value || 'all';
+  return v === 'all' ? CAP_KEYS : CAP_KEYS.filter(k => k === v);
+}
+
+// Helper anno selezionato (2025 | 2026)
+function getAnno(){ return document.getElementById('f-anno')?.value || '2025'; }
+function getANNO(k){
+  const y = getAnno();
+  return (y === '2026' ? DA.ANNO2026 : DA.ANNO2025)[k] || {};
+}
+function getMargProdie(k){
+  const a = getANNO(k);
+  const r = DA.RETTE_CDC[k];
+  return (a.prodie && a.prodie > 0) ? +(r - a.prodie).toFixed(2) : null;
+}
+
+const CATS_SHOW = [
+  { key:'PERSONALE',          label:'Personale',     color:'#3b82f6' },
+  { key:'VITTO',              label:'Vitto',         color:'#10b981' },
+  { key:'STRUTTURA',          label:'Struttura',     color:'#8b5cf6' },
+  { key:'UTENZE',             label:'Utenze',        color:'#f59e0b' },
+  { key:'MANUTENZIONI',       label:'Manutenzioni',  color:'#ec4899' },
+  { key:'CONSULENTI_ESTERNI', label:'Consulenti',    color:'#06b6d4' },
+  { key:'PRODOTTI_IGIENE',    label:'Igiene',        color:'#14b8a6' },
+  { key:'SPESE_SANITARIE',    label:'Sanitario',     color:'#f97316' },
+];
+
+function renderKpi(){
+  const keys = getKeys();
+  const pres = keys.map(k => DA.PRESENZE_FINAN[k] || 0);
+  const totP = pres.reduce((a,b)=>a+b,0);
+  let avgR=0, avgC=0, avgCap=0, totCentri=0, totPosti=0;
+  keys.forEach((k,i)=>{
+    const w = totP>0 ? pres[i]/totP : 1/keys.length;
+    avgR   += DA.RETTE_CDC[k] * w;
+    avgC   += ((getANNO(k).prodie||0)) * w;
+    avgCap += ((DA.STIMA_CAP_PRODIE[k]?.TOTALE||0)) * w;
+    totCentri += (DA.STIMA_CAP_PRODIE[k]?._n_centri || 0);
+    totPosti  += (DA.STIMA_CAP_PRODIE[k]?._posti_totali || 0);
+  });
+  const avgM    = avgR - avgC;
+  const margPct = avgR>0 ? (avgM/avgR*100).toFixed(1) : 0;
+  const inU     = keys.filter(k=>((getMargProdie(k)||0))>0).length;
+  const inP     = keys.filter(k=>((getMargProdie(k)||0))<0).length;
+  const overCap = keys.filter(k => {
+    const r = getANNO(k).prodie || 0;
+    const c = DA.STIMA_CAP_PRODIE[k]?.TOTALE || 0;
+    return r > 0 && c > 0 && r > c;
+  }).length;
+  const kpis=[
+    {icon:'🏢',val:totCentri,                         label:`Centri (su ${totPosti} posti)`,    col:'kpi-blue'},
+    {icon:'💶',val:'€'+avgR.toFixed(2),               label:'Retta media (ponderata)',          col:'kpi-blue'},
+    {icon:'🧾',val:'€'+avgC.toFixed(2),               label:'Costo reale medio/prodie',         col:'kpi-amber'},
+    {icon:'📋',val:'€'+avgCap.toFixed(2),             label:'Stima capitolato/prodie',          col:'kpi-violet'},
+    {icon:'📈',val:(avgM>=0?'+':'')+'€'+avgM.toFixed(2),  label:'Margine medio/prodie',         col:avgM>=0?'kpi-green':'kpi-red'},
+    {icon:'🚨',val:overCap+'/'+keys.length,           label:'Centri sopra capitolato',          col:overCap>0?'kpi-red':'kpi-green'},
+  ];
+  document.getElementById('kpi-cap').innerHTML=kpis.map(k=>`
+    <div class="kpi-card ${k.col}">
+      <div class="kpi-icon">${k.icon}</div>
+      <div class="kpi-val sm">${k.val}</div>
+      <div class="kpi-label">${k.label}</div>
+    </div>`).join('');
+}
+
+function renderRettaCosto(){
+  const keys=getKeys();
+  DA.mkChart('c-retta-costo',{type:'bar',
+    data:{labels:keys.map(k=>DA.CDC[k].label),
+      datasets:[
+        {label:'Retta Prefettura (€/prodie)',
+         data:keys.map(k=>DA.RETTE_CDC[k]),
+         backgroundColor:'#3b82f6cc',borderColor:'#3b82f6',borderWidth:1,borderRadius:4},
+        {label:'Costo Reale (€/prodie)',
+         data:keys.map(k=>(getANNO(k).prodie||0)),
+         backgroundColor:keys.map(k=>((getMargProdie(k)||0))>=0?'#10b981cc':'#ef4444cc'),
+         borderColor:    keys.map(k=>((getMargProdie(k)||0))>=0?'#10b981':'#ef4444'),
+         borderWidth:1,borderRadius:4}
+      ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top'}},
+      scales:{y:{title:{display:true,text:'€/prodie',color:'#546a87'},min:0}}}
+  });
+}
+
+function renderMargine(){
+  const keys=getKeys();
+  const vals=keys.map(k=>(getMargProdie(k)||0));
+  DA.mkChart('c-margine',{type:'bar',
+    data:{labels:keys.map(k=>DA.CDC[k].label),
+      datasets:[{
+        label:'Margine (€/prodie)',data:vals,
+        backgroundColor:vals.map(v=>v>=0?'#10b981cc':'#ef4444cc'),
+        borderColor:    vals.map(v=>v>=0?'#10b981':'#ef4444'),
+        borderWidth:1,borderRadius:4,
+      }]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.parsed.y>=0?'+':''}€${ctx.parsed.y.toFixed(2)}`}}},
+      scales:{y:{title:{display:true,text:'€/prodie',color:'#546a87'}}}}
+  });
+}
+
+// REFACTOR UX (mag 2026): da stacked bar → heatmap €/prodie CdC × categoria.
+// Lo stacked sommava 8 categorie nascondendo le voci minori; la heatmap rende
+// ogni valore confrontabile sia per CdC che per categoria.
+function renderCompProdie(){
+  const canvas = document.getElementById('c-comp-prodie');
+  if (!canvas) return;
+  const keys = getKeys();
+  let wrap = document.getElementById('c-comp-prodie-heat');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.id = 'c-comp-prodie-heat';
+    wrap.style.cssText = 'overflow-x:auto;font-size:11px;padding:6px 0;';
+    canvas.parentElement.style.height = 'auto';
+    canvas.parentElement.appendChild(wrap);
+    canvas.style.display = 'none';
+  }
+  const allVals = [];
+  keys.forEach(k => CATS_SHOW.forEach(c => allVals.push((DA.COSTO_PRODIE_CAT[k]||{})[c.key]||0)));
+  const maxV = Math.max(...allVals, 0.01);
+  const cellColor = (v) => {
+    const t = Math.min(v / maxV, 1);
+    const hue = 220 - 220 * t;
+    return `hsla(${hue},65%,45%,${0.12 + t*0.55})`;
+  };
+  let html = '<table style="border-collapse:separate;border-spacing:2px;width:100%;font-size:11px;">';
+  html += '<thead><tr>';
+  html += `<th style="text-align:left;padding:4px 8px;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;">Centro</th>`;
+  CATS_SHOW.forEach(c => {
+    html += `<th style="text-align:center;padding:4px 8px;min-width:78px;font-size:10px;color:${c.color};text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid ${c.color};">${c.label}</th>`;
+  });
+  html += '<th style="text-align:center;padding:4px 8px;min-width:78px;font-size:10px;color:var(--text1);text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid var(--text2);">Totale</th>';
+  html += '</tr></thead><tbody>';
+  keys.forEach(k => {
+    const label = DA.CDC[k]?.label || k;
+    let tot = 0;
+    let cellsHtml = '';
+    CATS_SHOW.forEach(c => {
+      const v = (DA.COSTO_PRODIE_CAT[k]||{})[c.key] || 0;
+      tot += v;
+      const bg = cellColor(v);
+      const txt = v > 0 ? '€'+v.toFixed(2) : '—';
+      const fw = v > maxV * 0.5 ? 800 : 600;
+      cellsHtml += `<td style="background:${bg};padding:6px 8px;text-align:center;border-radius:4px;font-weight:${fw};color:${v>maxV*0.6?'#fff':'var(--text1)'};">${txt}</td>`;
+    });
+    html += `<tr><td style="padding:6px 8px;font-weight:600;color:var(--text1);font-size:11px;">${label}</td>${cellsHtml}<td style="padding:6px 8px;text-align:center;font-weight:800;color:var(--text1);background:rgba(255,255,255,.04);border-radius:4px;">€${tot.toFixed(2)}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  html += `<div style="margin-top:8px;display:flex;align-items:center;gap:8px;font-size:10px;color:var(--text3);">
+    <span>Intensità:</span>
+    <div style="height:8px;flex:1;max-width:200px;border-radius:4px;background:linear-gradient(90deg,hsla(220,65%,45%,.12),hsla(110,65%,45%,.4),hsla(0,65%,45%,.7));"></div>
+    <span>€0</span><span style="margin-left:auto;">€${maxV.toFixed(2)}</span>
+  </div>`;
+  wrap.innerHTML = html;
+}
+
+function renderCatComp(id, catKey, color, lbl){
+  const keys=getKeys();
+  DA.mkChart(id,{type:'bar',
+    data:{labels:keys.map(k=>DA.CDC[k].label),
+      datasets:[
+        {label:'Stima Capitolato',
+         data:keys.map(k=>(DA.STIMA_CAP_PRODIE[k]||{})[catKey]||0),
+         backgroundColor:'#546a8766',borderColor:'#546a87',borderWidth:1,borderRadius:3},
+        {label:'Costo Reale — '+lbl,
+         data:keys.map(k=>(DA.COSTO_PRODIE_CAT[k]||{})[catKey]||0),
+         backgroundColor:color+'cc',borderColor:color,borderWidth:1,borderRadius:3}
+      ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top'}},
+      scales:{y:{title:{display:true,text:'€/prodie',color:'#546a87'},min:0}}}
+  });
+}
+
+function renderTable(){
+  const keys=getKeys();
+  const thead=`<thead><tr>
+    <th style="text-align:left">Centro</th>
+    <th>Retta</th><th>Costo Tot.</th><th>Margine</th>
+    <th>Personale</th><th>Vitto</th><th>Struttura</th>
+    <th>Utenze</th><th>Manut.</th><th>Altro</th>
+  </tr></thead>`;
+
+  const rows=keys.map(k=>{
+    const r   = DA.RETTE_CDC[k];
+    const c   = (getANNO(k).prodie||0);
+    const m   = (getMargProdie(k)||0);
+    const mC  = m>=0?'margine-pos':'margine-neg';
+    const pd  = DA.COSTO_PRODIE_CAT[k]||{};
+    const st  = DA.STIMA_CAP_PRODIE[k]||{};
+    const cdc = DA.CDC[k];
+    function vc(rv,sv,title){
+      if(!rv) return '<td class="num">—</td>';
+      const d=rv-sv; const cls=Math.abs(d)<0.3?'':d>0?'val-over':'val-under';
+      const tip=title?` title="${title}"`:'';
+      return `<td class="num ${cls}"${tip}>€${rv.toFixed(2)}</td>`;
+    }
+    // Tooltip PERSONALE: mostra fascia Allegato A + ore/g + €/h usati per stima
+    const stPersTip = st._fascia
+      ? `Allegato A fascia ${st._fascia} ospiti (tipo ${st._tipo}, posti max ${st._posti})\n`
+        +`Ore dovute/giorno: ${st._ore_g} h  ×  €${st._euro_h}/h  ÷  ${st._osp_medi} ospiti medi`
+        +(st._note ? `\n⚠ ${st._note}` : '')
+      : '';
+    const altro=(pd.TOTALE||0)-(pd.PERSONALE||0)-(pd.VITTO||0)-(pd.STRUTTURA||0)-(pd.UTENZE||0)-(pd.MANUTENZIONI||0);
+    return `<tr>
+      <td><span class="cdc-pill ${cdc.pill}">${cdc.label}</span></td>
+      <td class="num" style="font-weight:700">€${r.toFixed(2)}</td>
+      <td class="num" style="font-weight:700">€${c.toFixed(2)}</td>
+      <td class="num ${mC}">${m>=0?'+':''}€${Math.abs(m).toFixed(2)}</td>
+      ${vc(pd.PERSONALE,st.PERSONALE,stPersTip)}
+      ${vc(pd.VITTO,st.VITTO)}
+      ${vc(pd.STRUTTURA,st.STRUTTURA)}
+      ${vc(pd.UTENZE,st.UTENZE)}
+      ${vc(pd.MANUTENZIONI,st.MANUTENZIONI)}
+      <td class="num">€${altro>0?altro.toFixed(2):'—'}</td>
+    </tr>`;
+  }).join('');
+
+  // ── Riga media cooperativa (benchmark interno) ──
+  const cm = DA.COSTI_MEDI_COOP;
+  const mediaRow=`<tr style="background:rgba(16,185,129,.06);border-top:2px solid rgba(16,185,129,.3)">
+    <td style="font-weight:700;color:#34d399">📊 Media Coop.</td>
+    <td class="num" style="font-weight:700;color:#34d399">—</td>
+    <td class="num" style="font-weight:700;color:#34d399">€${cm.TOTALE.toFixed(2)}</td>
+    <td class="num" style="color:var(--text3)">—</td>
+    <td class="num" style="color:#34d399">€${cm.PERSONALE.toFixed(2)}</td>
+    <td class="num" style="color:#34d399">€${cm.VITTO.toFixed(2)}</td>
+    <td class="num" style="color:#34d399">€${cm.STRUTTURA.toFixed(2)}</td>
+    <td class="num" style="color:#34d399">€${cm.UTENZE.toFixed(2)}</td>
+    <td class="num" style="color:#34d399">€${cm.MANUTENZIONI.toFixed(2)}</td>
+    <td class="num" style="color:var(--text3)">—</td>
+  </tr>`;
+  // ── Riga capitolato standard ──
+  // PERSONALE: stima da Allegato A (ore dovute×€/h÷ospiti) — valore medio dei centri attivi
+  const cdcCap = keys.filter(k => DA.CDC_CAPITOLATO.includes(k));
+  const avgStimaPers = cdcCap.length
+    ? (cdcCap.reduce((s,k)=>s+(DA.STIMA_CAP_PRODIE[k]?.PERSONALE||0),0)/cdcCap.length).toFixed(2)
+    : '—';
+  const capRow=`<tr style="background:rgba(84,106,135,.08);font-style:italic">
+    <td style="color:var(--text3)" title="PERSONALE: media Allegato A per centri soggetti al capitolato">📋 Capitolato (Allegato A)</td>
+    <td class="num" style="color:var(--text3)">—</td>
+    <td class="num" style="color:var(--text3)">—</td>
+    <td class="num" style="color:var(--text3)">—</td>
+    <td class="num" style="color:var(--text3)" title="Media stima Allegato A per centri capitolato">≈€${avgStimaPers}</td>
+    <td class="num" style="color:var(--text3)">22% retta</td>
+    <td class="num" style="color:var(--text3)">12% retta</td>
+    <td class="num" style="color:var(--text3)">8% retta</td>
+    <td class="num" style="color:var(--text3)">5% retta</td>
+    <td class="num" style="color:var(--text3)">9% retta</td>
+  </tr>`;
+  document.getElementById('t-prodie').innerHTML=thead+'<tbody>'+rows+mediaRow+capRow+'</tbody>';
+}
+
+function renderBreakdownCards(){
+  const keys=getKeys();
+  const maxVal=Math.max(...keys.flatMap(k=>CATS_SHOW.map(c=>(DA.COSTO_PRODIE_CAT[k]||{})[c.key]||0)));
+  document.getElementById('breakdown-cards').innerHTML=keys.map(k=>{
+    const cdc=DA.CDC[k]; const pd=DA.COSTO_PRODIE_CAT[k]||{}; const st=DA.STIMA_CAP_PRODIE[k]||{};
+    const r=DA.RETTE_CDC[k]; const m=(getMargProdie(k)||0); const mC=m>=0?'margine-pos':'margine-neg';
+    const catRows=CATS_SHOW.map(cat=>{
+      const rv=pd[cat.key]||0; const sv=st[cat.key]||0;
+      const d=rv-sv; const pct=maxVal>0?rv/maxVal*100:0;
+      const dC=Math.abs(d)<0.3?'':d>0?'val-over':'val-under';
+      // Per PERSONALE mostra la fascia Allegato A come nota sotto la stima
+      const persFasciaTip = (cat.key==='PERSONALE' && st._fascia)
+        ? ` title="Allegato A fascia ${st._fascia} osp. (${st._tipo}) — ${st._ore_g} h/g × €${st._euro_h}/h ÷ ${st._osp_medi} osp.${st._note?' ⚠ contratto quadro':''}"` : '';
+      const persFasciaNote = (cat.key==='PERSONALE' && st._fascia)
+        ? `<span style="font-size:10px;color:var(--text3);margin-left:4px">[${st._tipo} ${st._fascia}osp ${st._ore_g}h/g]</span>` : '';
+      return `<div class="cat-row">
+        <span class="cat-row-label">${cat.label}</span>
+        <div class="cat-bar-wrap"><div class="cat-bar-fill" style="width:${pct}%;background:${cat.color}"></div></div>
+        <span class="cat-val">€${rv.toFixed(2)}</span>
+        <span class="cat-stima"${persFasciaTip}>cap:€${sv.toFixed(2)}${persFasciaNote}</span>
+        <span class="cat-delta ${dC}">${d>=0?'+':''}€${d.toFixed(2)}</span>
+      </div>`;
+    }).join('');
+    return `<div class="cat-card">
+      <div class="cat-card-title">
+        <span class="cdc-pill ${cdc.pill}">${cdc.label}</span>
+        <span style="margin-left:auto;font-weight:400;color:var(--text2)">Retta: <strong>€${r.toFixed(2)}</strong></span>
+        <span class="${mC}">&nbsp;${m>=0?'+':''}€${m.toFixed(2)}/gg</span>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:10px">
+        Costo totale: <strong>€${((getANNO(k).prodie||0)).toFixed(2)}/prodie</strong>
+        &nbsp;·&nbsp; presenze anno: ${DA.fmt(DA.PRESENZE_FINAN[k]||0)}
+      </div>
+      ${catRows}
+    </div>`;
+  }).join('');
+}
+
+// ─── ❶ SCOSTAMENTO ORDINATO ────────────────────────────────────────────
+function renderScostamento(){
+  const keys = getKeys();
+  // Per ogni CdC: scostamento = costo_reale - costo_capitolato_totale
+  const rows = keys.map(k => {
+    const real = (getANNO(k).prodie || 0);
+    const cap  = (DA.STIMA_CAP_PRODIE[k]?.TOTALE || 0);
+    return { k, real, cap, delta: real - cap, label: DA.CDC[k].label };
+  }).filter(r => r.real > 0 && r.cap > 0);
+  rows.sort((a,b) => b.delta - a.delta);  // peggiore in alto
+
+  DA.mkChart('c-scostamento', {
+    type: 'bar',
+    data: {
+      labels: rows.map(r => r.label),
+      datasets: [{
+        label: 'Scostamento €/prodie (Reale − Capitolato)',
+        data: rows.map(r => +r.delta.toFixed(2)),
+        backgroundColor: rows.map(r => r.delta > 0 ? '#ef4444cc' : '#10b981cc'),
+        borderColor:     rows.map(r => r.delta > 0 ? '#ef4444' : '#10b981'),
+        borderWidth: 1, borderRadius: 5,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const r = rows[ctx.dataIndex];
+              return [
+                `Reale:      €${r.real.toFixed(2)}/prodie`,
+                `Capitolato: €${r.cap.toFixed(2)}/prodie`,
+                `Delta:      ${r.delta>=0?'+':''}€${r.delta.toFixed(2)}/prodie`
+              ];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Reale − Capitolato (€/prodie)', color: '#546a87' },
+          grid: { color: 'rgba(255,255,255,.04)' }
+        },
+        y: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+// ─── ❷ HEATMAP CATEGORIE × CdC ─────────────────────────────────────────
+function renderHeatmap(){
+  const keys = getKeys();
+  const cats = ['PERSONALE','VITTO','STRUTTURA','UTENZE','MANUTENZIONI','CONSULENTI_ESTERNI'];
+  const catLab = {PERSONALE:'Personale',VITTO:'Vitto',STRUTTURA:'Struttura',UTENZE:'Utenze',MANUTENZIONI:'Manutenz.',CONSULENTI_ESTERNI:'Consul.'};
+  // Calcolo delta per ogni (cat, cdc)
+  const cellColor = v => {
+    if (v == null) return 'rgba(100,116,139,.15)';
+    const max = 5; // saturazione a ±5 €/prodie
+    const t = Math.max(-1, Math.min(1, v / max));
+    if (t > 0) {
+      const a = 0.15 + 0.55 * t;
+      return `rgba(239,68,68,${a.toFixed(2)})`;   // rosso = sopra capitolato
+    } else if (t < 0) {
+      const a = 0.15 + 0.55 * Math.abs(t);
+      return `rgba(16,185,129,${a.toFixed(2)})`;  // verde = sotto capitolato
+    }
+    return 'rgba(245,158,11,.20)';                 // giallo neutro
+  };
+
+  // Header CdC
+  let html = `<div style="display:grid;grid-template-columns:130px repeat(${keys.length},1fr);gap:3px;font-size:10.5px">`;
+  html += `<div style="font-weight:700;color:var(--text2);padding:5px">Categoria \\ CdC</div>`;
+  keys.forEach(k => {
+    const cdc = DA.CDC[k];
+    html += `<div style="background:var(--surface2);padding:5px;border-radius:4px;text-align:center;font-weight:700;font-size:10px">${cdc.label.replace(/^(CAS |CAD )/,'').slice(0,12)}</div>`;
+  });
+
+  // Righe per categoria
+  cats.forEach(cat => {
+    html += `<div style="font-weight:700;color:var(--text2);padding:8px 5px;align-self:center">${catLab[cat]||cat}</div>`;
+    keys.forEach(k => {
+      const real = (DA.COSTO_PRODIE_CAT[k] || {})[cat] || 0;
+      const cap  = (DA.STIMA_CAP_PRODIE[k] || {})[cat] || 0;
+      const delta = real - cap;
+      const txt = (real > 0 || cap > 0)
+        ? `${delta>=0?'+':''}€${delta.toFixed(1)}`
+        : '—';
+      const tip = `${DA.CDC[k].label} · ${catLab[cat]||cat}\\nReale: €${real.toFixed(2)} · Capitolato: €${cap.toFixed(2)}\\nDelta: ${delta>=0?'+':''}€${delta.toFixed(2)}/prodie`;
+      html += `<div title="${tip}" style="background:${cellColor((real>0||cap>0)?delta:null)};padding:8px 4px;border-radius:4px;text-align:center;font-weight:700;color:var(--text1)">${txt}</div>`;
+    });
+  });
+
+  html += '</div>';
+  document.getElementById('heatmap-categorie').innerHTML = html;
+}
+
+function renderAll(){
+  DA.chartDefaults(Chart);
+  renderKpi();
+  renderScostamento();
+  renderHeatmap();
+  renderRettaCosto(); renderMargine(); renderCompProdie();
+  renderCatComp('c-pers-comp',  'PERSONALE',    '#8b5cf6','Personale');
+  renderCatComp('c-vitto-comp', 'VITTO',        '#06b6d4','Vitto');
+  renderCatComp('c-strutt-comp','STRUTTURA',    '#ec4899','Struttura');
+  renderCatComp('c-manut-comp', 'MANUTENZIONI', '#f97316','Manutenzioni');
+  renderTable(); renderBreakdownCards();
+}
+
+// ═══ ALLEGATO A — Dotazione minima per fascia (Zoho Dotazione_Minima_Cas) ═══
+// Usa il nuovo endpoint /api/dashboard/dotazione-richiesta?tipo=CC|CAD&posti=N
+function populateAllACdcSelect() {
+  const sel = document.getElementById('all-a-cdc');
+  if (!sel) return;
+  const opts = CAP_KEYS.map(k => {
+    const c = DA.CDC[k] || {};
+    return `<option value="${k}" data-tipo="${c.tipo||''}" data-posti="${c.posti_max||0}">${c.label||k} · ${c.tipo||'?'} · ${c.posti_max||0} posti</option>`;
+  });
+  sel.innerHTML = opts.join('');
+  sel.addEventListener('change', renderAllegatoA);
+  // Default su CdC dal filtro globale o primo
+  const f = document.getElementById('f-cdc')?.value;
+  if (f && f !== 'all') sel.value = f;
+}
+
+const CATEGORIE_COLORS = {
+  'OPERATORE DIURNO':    '#3b82f6',
+  'OPERATORE NOTTURNO':  '#6366f1',
+  'DIRETTORE':           '#8b5cf6',
+  'AMMINISTRATIVO':      '#0891b2',
+  'INFERMIERE':          '#06b6d4',
+  'MEDICO':              '#10b981',
+  'OPERATORE SOCIALE':   '#f59e0b',
+  'MEDIATORE LINGUISTICO': '#ec4899',
+};
+
+async function renderAllegatoA() {
+  const sel = document.getElementById('all-a-cdc');
+  const grid = document.getElementById('allegato-a-grid');
+  const meta = document.getElementById('all-a-meta');
+  if (!sel || !grid || !window.LIVE?.getDotazioneRichiesta) return;
+  const k = sel.value;
+  const c = DA.CDC[k] || {};
+  const tipo = (c.tipo === 'SUA' || c.tipo === 'CAD') ? 'CAD' : 'CC';
+  const posti = c.posti_max || 0;
+
+  meta.innerHTML = `<strong>${c.label||k}</strong> · tipo capitolato <strong style="color:var(--accent2);">${tipo}</strong> · capacità autorizzata <strong>${posti}</strong> posti`;
+  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:14px;color:var(--text3);font-size:11px;">⏳ Caricamento Zoho Dotazione_Minima_Cas…</div>';
+
+  try {
+    const data = await window.LIVE.getDotazioneRichiesta(tipo, posti);
+    const dot = data?.dotazione || {};
+    const items = Object.entries(dot).map(([cat, info]) => {
+      const oreEff = info?.ore_effettive;
+      const oreRep = info?.ore_reperibili;
+      const base   = info?.base;
+      const fasciaMax = info?.fascia_max;
+      const color = CATEGORIE_COLORS[cat] || '#94a3b8';
+      const baseLabel = base === 'GIORNO' ? 'h/giorno' : (base === 'SETTIMANA' ? 'h/sett' : '');
+      const valStr   = oreEff == null ? 'N/D' : oreEff.toFixed(2);
+      const repStr   = oreRep ? ` + ${oreRep.toFixed(1)} h rep.` : '';
+      return `
+        <div style="background:rgba(15,23,42,.5);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:10px 12px;border-left:3px solid ${color};">
+          <div style="font-size:9.5px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">${cat}</div>
+          <div style="font-size:22px;font-weight:800;color:var(--text1);line-height:1.1;">${valStr}</div>
+          <div style="font-size:10px;color:var(--text2);margin-top:2px;">${baseLabel}${repStr}</div>
+          <div style="font-size:9px;color:var(--text3);margin-top:4px;">fascia ≤ ${fasciaMax||'—'} posti</div>
+        </div>
+      `;
+    });
+    grid.innerHTML = items.join('');
+  } catch (e) {
+    grid.innerHTML = `<div style="grid-column:1/-1;color:#f87171;font-size:11px;">⚠️ Errore caricamento dotazione: ${e.message||e}</div>`;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  renderAll();
+  populateAllACdcSelect();
+  renderAllegatoA();
+  // Quando l'utente cambia il filtro principale CdC, riallinea la fascia Allegato A
+  document.getElementById('f-cdc')?.addEventListener('change', () => {
+    const v = document.getElementById('f-cdc').value;
+    if (v && v !== 'all') {
+      document.getElementById('all-a-cdc').value = v;
+      renderAllegatoA();
+    }
+  });
+});
+</script>
+</body>
+</html>

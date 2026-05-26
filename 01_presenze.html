@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="athena-static-only" content="true"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Presenze — Dashboard Analytics</title>
+<link rel="stylesheet" href="shared/style.css?v=20260525-1800">
+<style>
+.tipo-badge {
+  display:inline-flex; align-items:center; gap:4px;
+  font-size:10px; font-weight:700; padding:2px 8px; border-radius:4px;
+}
+.tipo-cc    { background:rgba(59,130,246,.15);  color:#60a5fa; }
+.tipo-cad   { background:rgba(16,185,129,.15);  color:#34d399; }
+.tipo-mixed { background:rgba(245,158,11,.15);  color:#fbbf24; }
+.pres-note  { font-size:10px; color:var(--text3); font-style:italic; }
+</style>
+</head>
+<body data-page="presenze">
+<div id="topbar" class="topbar"></div>
+<div id="data-mode-bar" class="data-bar static mb-16"><span class="dot"></span>Caricamento dati...</div>
+
+<div class="main">
+
+  <div class="page-header">
+    <h1><span class="icon">📊</span> Presenze Ospiti — Analisi Giornaliera</h1>
+    <p>Media ospiti presenti per giorno per centro di costo e tipologia — Fonte: Zoho Analytics "Andamento presenze"</p>
+  </div>
+
+  <!-- FILTRI -->
+  <div class="filters">
+    <label>Anno:</label>
+    <select id="f-anno" onchange="renderAll()">
+      <option value="2026" selected>2026 (previsione)</option>
+      <option value="2025">2025 (reale)</option>
+    </select>
+    <label>Mese:</label>
+    <select id="f-mese" onchange="renderAll()">
+      <option value="all">Tutto l'anno</option>
+      <option value="0">Gennaio</option><option value="1">Febbraio</option>
+      <option value="2">Marzo</option><option value="3">Aprile</option>
+      <option value="4">Maggio</option><option value="5">Giugno</option>
+      <option value="6">Luglio</option><option value="7">Agosto</option>
+      <option value="8">Settembre</option><option value="9">Ottobre</option>
+      <option value="10">Novembre</option><option value="11">Dicembre</option>
+    </select>
+    <label>Tipo:</label>
+    <select id="f-tipo" onchange="renderAll()">
+      <option value="all">Tutti i tipi</option>
+      <option value="CC">CC — Collettivo</option>
+      <option value="CAD">CAD — Diffuso</option>
+    </select>
+    <label>Centro:</label>
+    <select id="f-cdc" onchange="renderAll()">
+      <option value="all">Tutti i centri</option>
+      <option value="PISA">CAS PISA (CC)</option>
+      <option value="RIETI">CAD RIETI (CAD)</option>
+      <option value="DROSSO">DROSSO (CC)</option>
+      <option value="LORANZE">LORANZÈ (CC)</option>
+      <option value="VICENZA">VICENZA (CAD)</option>
+      <option value="MODENA">MODENA IMM. (CC+CAD)</option>
+      <option value="VICO">VICO-VALCHIUSA (CC)</option>
+      <option value="CAMBO">CAMPOBASSO (CC)</option>
+    </select>
+    <label>Vista:</label>
+    <select id="f-view" onchange="renderAll()">
+      <option value="giornaliera" selected>Media giornaliera (osp/g)</option>
+      <option value="mensile">Presenze mensili totali</option>
+    </select>
+    <button class="btn-apply" onclick="renderAll()">↻ Aggiorna</button>
+  </div>
+
+  <!-- KPI -->
+  <div class="kpi-grid" id="kpi-pres"></div>
+
+  <!-- ❶ BULLET CHART: Utilizzo posti per CdC (ospiti medi vs posti autorizzati) -->
+  <div class="chart-card" style="margin-bottom:14px">
+    <div class="chart-title">
+      <span class="dot" style="background:#10b981"></span>
+      Utilizzo posti autorizzati per CdC (riempimento %)
+      <span style="margin-left:auto;font-size:10px;color:var(--text3);font-weight:400">
+        🟢 ≥85% (target) · 🟡 60-85% · 🔴 &lt;60% (sottoutilizzato)
+      </span>
+    </div>
+    <div id="bullet-utilizzo" style="display:flex;flex-direction:column;gap:8px;padding:8px"></div>
+  </div>
+
+  <!-- Chart: presenze stacked per CdC -->
+  <div class="chart-grid cols-full">
+    <div class="chart-card">
+      <div class="chart-title">
+        <span class="dot" style="background:#3b82f6"></span>
+        <span id="chart-main-title">Media ospiti/giorno per centro</span>
+        <span class="sub">Zoho Analytics</span>
+      </div>
+      <div class="chart-wrap" style="height:340px"><canvas id="c-pres-stack"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Chart: trend + distribuzione -->
+  <div class="chart-grid cols-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#10b981"></span>Trend — confronto centri</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-pres-line"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#8b5cf6"></span>Distribuzione presenze per CdC (% annua)</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-pres-pie"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Chart: media g. totale + CC vs CAD -->
+  <div class="chart-grid cols-2-1">
+    <div class="chart-card">
+      <div class="chart-title">
+        <span class="dot" style="background:#f59e0b"></span>
+        Media ospiti/giorno — andamento mensile (selezione corrente)
+        <span class="sub">presenze mese ÷ giorni del mese</span>
+      </div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-ospiti-g"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#ec4899"></span>Ospiti/giorno — CC vs CAD vs MIXED</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-tipo"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Tabella dettaglio -->
+  <div class="section-title">📋 Dettaglio per CdC — <span id="table-title-mode">Media ospiti/giorno</span></div>
+  <div class="chart-card">
+    <div style="overflow-x:auto">
+      <table class="data-table" id="t-presenze"></table>
+    </div>
+    <div class="alert alert-info" style="margin-top:12px">
+      ✅ Fonte: <strong>Zoho Analytics "Andamento presenze"</strong>.
+      Media giornaliera = presenze mese ÷ giorni del mese (non media tra mesi).
+      <strong>VICENZA</strong> = CAD. <strong>MODENA IMMIGRAZIONE</strong> = strutture miste CC+CAD.
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<script src="shared/data.js?v=20260525-1800"></script>
+<script src="shared/filters.js?v=20260525-1800"></script>
+<script src="shared/live.js?v=20260525-1800"></script>
+<script src="shared/nav.js?v=20260525-1800"></script>
+<script>
+// ─────────────────────────────────────────────────────────────
+// COSTANTI
+// ─────────────────────────────────────────────────────────────
+const ALL_KEYS = ['PISA','DROSSO','LORANZE','VICENZA','RIETI','MODENA','VICO','CAMBO'];
+const GIORNI_MESE = { 2025:[31,28,31,30,31,30,31,31,30,31,30,31], 2026:[31,28,31,30,31,30,31,31,30,31,30,31] };
+
+// ─────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────
+function getAnno(){ return parseInt(document.getElementById('f-anno')?.value||2026); }
+function getMese(){ return document.getElementById('f-mese')?.value||'all'; }
+function getTipo(){ return document.getElementById('f-tipo')?.value||'all'; }
+function getCdc() { return document.getElementById('f-cdc')?.value||'all'; }
+function isGiornaliera(){ return document.getElementById('f-view')?.value==='giornaliera'; }
+
+function activeCdcs(){
+  const cdc  = getCdc();
+  const tipo = getTipo();
+  if(cdc !== 'all') return [cdc];
+
+  // Filtra per tipo: MIXED (MODENA) è inclusa in CC e CAD
+  return ALL_KEYS.filter(k=>{
+    if(tipo==='all') return true;
+    const t = DA.CDC[k]?.tipo || 'CC';
+    if(tipo==='CC')  return t==='CC' || t==='MIXED';
+    if(tipo==='CAD') return t==='CAD' || t==='MIXED';
+    return true;
+  });
+}
+
+function activeMesi(){
+  const v = getMese();
+  return v==='all' ? [...Array(12).keys()] : [parseInt(v)];
+}
+
+function getGiorni(anno, m){ return (GIORNI_MESE[anno]||GIORNI_MESE[2025])[m]||30; }
+
+function getPresenze(k, m){
+  return (DA.getPresenzeM(getAnno())[k]?.[m])||0;
+}
+function getPresenzeG(k, m){
+  const p=getPresenze(k,m), g=getGiorni(getAnno(),m);
+  return g>0 ? p/g : 0; // ospiti medi quel giorno del mese
+}
+function getValue(k, m){ return isGiornaliera() ? getPresenzeG(k,m) : getPresenze(k,m); }
+function getMesiLabels(){ return activeMesi().map(m=>DA.MESI_LABEL[m]); }
+
+// ─────────────────────────────────────────────────────────────
+// KPI
+// ─────────────────────────────────────────────────────────────
+function renderKpi(){
+  const keys=activeCdcs(), mesi=activeMesi(), anno=getAnno();
+  const gg_arr = GIORNI_MESE[anno]||GIORNI_MESE[2025];
+  const pm = DA.getPresenzeM(anno);
+
+  // Totale presenze nel periodo
+  const totPres = keys.reduce((s,k)=>s+mesi.reduce((sm,m)=>sm+(pm[k]?.[m]||0),0),0);
+  // Media ospiti/giorno nel periodo (pesata per giorni reali)
+  const totGiorni = mesi.reduce((s,m)=>s+gg_arr[m],0);
+  const mediaGiorn = totGiorni>0 ? totPres/totGiorni : 0;
+  // Picco mensile
+  const allG = keys.flatMap(k=>mesi.map(m=>{ const g=gg_arr[m]||30; return (pm[k]?.[m]||0)/g; }));
+  const piccoG = Math.max(...allG.filter(v=>v>0), 0);
+  // Mese con più presenze
+  const meseMax = mesi.length>1 ? mesi.reduce((best,m)=>{
+    const tot=keys.reduce((s,k)=>s+(pm[k]?.[m]||0),0);
+    const bestTot=keys.reduce((s,k)=>s+(pm[k]?.[best]||0),0);
+    return tot>bestTot?m:best;
+  },mesi[0]) : mesi[0];
+
+  const kpis=[
+    {icon:'👤', val:Math.round(mediaGiorn).toLocaleString('it-IT'),
+     label:'Media ospiti/giorno (periodo)', col:'kpi-blue'},
+    {icon:'📅', val:DA.fmt(totPres),
+     label:'Totale presenze nel periodo', col:'kpi-green'},
+    {icon:'⬆️', val:Math.round(piccoG).toLocaleString('it-IT'),
+     label:'Picco ospiti/giorno (singolo mese)', col:'kpi-amber'},
+    {icon:'📆', val:DA.MESI_LABEL[meseMax]||'—',
+     label:'Mese con più presenze', col:'kpi-violet'},
+  ];
+  document.getElementById('kpi-pres').innerHTML=kpis.map(k=>`
+    <div class="kpi-card ${k.col}">
+      <div class="kpi-icon">${k.icon}</div>
+      <div class="kpi-val">${k.val}</div>
+      <div class="kpi-label">${k.label}</div>
+    </div>`).join('');
+}
+
+// ─────────────────────────────────────────────────────────────
+// CHART: stacked bar
+// ─────────────────────────────────────────────────────────────
+function renderPresStack(){
+  const keys=activeCdcs(), mesi=activeMesi(), isG=isGiornaliera();
+  document.getElementById('chart-main-title').textContent =
+    isG ? 'Media ospiti/giorno per centro di costo' : 'Presenze mensili totali per centro di costo';
+  DA.mkChart('c-pres-stack',{type:'bar',
+    data:{labels:getMesiLabels(),
+      datasets:keys.map(k=>({
+        label:DA.CDC[k]?.label||k,
+        data:mesi.map(m=>isG ? +getPresenzeG(k,m).toFixed(1) : getPresenze(k,m)),
+        backgroundColor:DA.CDC[k]?.color+'bb', borderColor:DA.CDC[k]?.color,
+        borderWidth:1, borderRadius:3,
+      }))},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top'},
+        tooltip:{callbacks:{label:ctx=>isG?`${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)} osp/g`:`${ctx.dataset.label}: ${DA.fmt(ctx.parsed.y)}`}}},
+      scales:{x:{stacked:true},y:{stacked:true,
+        title:{display:true,text:isG?'Ospiti/giorno':'Presenze totali',color:'#546a87'}}}}
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// CHART: linee trend
+// ─────────────────────────────────────────────────────────────
+function renderPresLine(){
+  const keys=activeCdcs(), mesi=activeMesi(), isG=isGiornaliera();
+  DA.mkChart('c-pres-line',{type:'line',
+    data:{labels:getMesiLabels(),
+      datasets:keys.map(k=>({
+        label:DA.CDC[k]?.label||k,
+        data:mesi.map(m=>isG ? +getPresenzeG(k,m).toFixed(1) : getPresenze(k,m)),
+        borderColor:DA.CDC[k]?.color, backgroundColor:DA.CDC[k]?.color+'22',
+        borderWidth:2, pointRadius:3, tension:.35, fill:false,
+      }))},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top'}},
+      scales:{y:{title:{display:true,text:isG?'Ospiti/g':'Presenze',color:'#546a87'}}}}
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// CHART: pie distribuzione annua
+// ─────────────────────────────────────────────────────────────
+function renderPresPie(){
+  const keys=activeCdcs(), mesi=activeMesi();
+  const pm=DA.getPresenzeM(getAnno());
+  const vals=keys.map(k=>mesi.reduce((s,m)=>s+(pm[k]?.[m]||0),0));
+  DA.mkChart('c-pres-pie',{type:'doughnut',
+    data:{labels:keys.map(k=>DA.CDC[k]?.label||k),
+      datasets:[{data:vals, backgroundColor:keys.map(k=>(DA.CDC[k]?.color||'#999')+'cc'),
+        borderColor:'#0d1526',borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
+      plugins:{legend:{position:'right',labels:{font:{size:11}}}}}
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// CHART: ospiti/g totale per mese
+// ─────────────────────────────────────────────────────────────
+function renderOspitiG(){
+  const keys=activeCdcs(), mesi=activeMesi(), anno=getAnno();
+  const gg_arr=GIORNI_MESE[anno]||GIORNI_MESE[2025];
+  const pm=DA.getPresenzeM(anno);
+  // Media ospiti/giorno per mese = sum(presenze_mese) / giorni_mese
+  const data=mesi.map(m=>{
+    const totPres=keys.reduce((s,k)=>s+(pm[k]?.[m]||0),0);
+    const gg=gg_arr[m]||30;
+    return +(totPres/gg).toFixed(1);
+  });
+  DA.mkChart('c-ospiti-g',{type:'bar',
+    data:{labels:getMesiLabels(),
+      datasets:[{label:'Ospiti medi/giorno',data,
+        backgroundColor:'#f59e0bcc',borderColor:'#f59e0b',borderWidth:1,borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>`Ospiti medi/g: ${ctx.parsed.y.toFixed(1)}`}}},
+      scales:{y:{title:{display:true,text:'Ospiti/giorno',color:'#546a87'},beginAtZero:false}}}
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// CHART: CC vs CAD vs MIXED — ospiti/giorno
+// ─────────────────────────────────────────────────────────────
+function renderTipo(){
+  const anno=getAnno(), mesi=activeMesi();
+  const gg_arr=GIORNI_MESE[anno]||GIORNI_MESE[2025];
+  const pm=DA.getPresenzeM(anno);
+
+  // Raggruppa per tipo usando DA.CDC[k].tipo (aggiornato)
+  const gruppi = { CC:{keys:[],label:'CC — Collettivo',color:'#3b82f6'},
+                   CAD:{keys:[],label:'CAD — Diffuso',color:'#10b981'},
+                   MIXED:{keys:[],label:'MIXED — CC+CAD',color:'#f59e0b'} };
+  ALL_KEYS.forEach(k=>{ const t=DA.CDC[k]?.tipo||'CC'; if(gruppi[t]) gruppi[t].keys.push(k); });
+
+  // Media ospiti/giorno per tipo (tutto il periodo)
+  const vals = Object.entries(gruppi).map(([tipo,g])=>{
+    const totPres=g.keys.reduce((s,k)=>s+mesi.reduce((sm,m)=>sm+(pm[k]?.[m]||0),0),0);
+    const totGg=mesi.reduce((s,m)=>s+gg_arr[m],0);
+    return totGg>0 ? +(totPres/totGg).toFixed(1) : 0;
+  });
+  const labels  = Object.values(gruppi).map(g=>g.label);
+  const colors  = Object.values(gruppi).map(g=>g.color+'cc');
+  const centers = Object.entries(gruppi).map(([_,g])=>g.keys.join(', ')||'—');
+
+  DA.mkChart('c-tipo',{type:'doughnut',
+    data:{labels, datasets:[{data:vals, backgroundColor:colors, borderColor:'#0d1526', borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'50%',
+      plugins:{legend:{position:'bottom',labels:{font:{size:11}}},
+        tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.parsed.toFixed(1)} osp/g\n(${centers[ctx.dataIndex]})`}}}}
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// TABELLA DETTAGLIO
+// ─────────────────────────────────────────────────────────────
+function renderTable(){
+  const keys=activeCdcs(), mesi=activeMesi(), isG=isGiornaliera();
+  const anno=getAnno();
+  const gg_arr=GIORNI_MESE[anno]||GIORNI_MESE[2025];
+  const pm=DA.getPresenzeM(anno);
+  document.getElementById('table-title-mode').textContent=isG?'Media ospiti/giorno':'Presenze mensili totali';
+
+  const labels=getMesiLabels();
+  const tipoBadge=t=>t==='CC'?'<span class="tipo-badge tipo-cc">CC</span>':
+                      t==='CAD'?'<span class="tipo-badge tipo-cad">CAD</span>':
+                      '<span class="tipo-badge tipo-mixed">MX</span>';
+
+  const ths='<thead><tr><th>Centro</th><th>Tipo</th><th>CdC</th>'+labels.map(m=>`<th>${m}</th>`).join('')+`<th>${isG?'Media/g':'Totale'}</th></tr></thead>`;
+  const rows=keys.map(k=>{
+    const cdc=DA.CDC[k];
+    const tipo=cdc?.tipo||'CC';
+    const codice=cdc?.codice||'—';
+    const cells=mesi.map(m=>{
+      const v=isG ? getPresenzeG(k,m).toFixed(1) : DA.fmt(getPresenze(k,m));
+      return `<td class="num">${v}</td>`;
+    }).join('');
+    const tot=mesi.reduce((s,m)=>s+(pm[k]?.[m]||0),0);
+    const summary=isG
+      ? +(mesi.reduce((s,m)=>{ const gg=gg_arr[m]||30; return s+(pm[k]?.[m]||0)/gg; },0)/mesi.length).toFixed(1)
+      : tot;
+    return `<tr><td><span class="cdc-pill ${cdc?.pill||''}">${cdc?.label||k}</span></td>
+      <td>${tipoBadge(tipo)}</td>
+      <td style="font-size:10px;color:var(--text2);white-space:nowrap">${codice}</td>${cells}
+      <td class="num" style="font-weight:600">${isG?summary:DA.fmt(summary)}</td></tr>`;
+  }).join('');
+
+  const totCells=mesi.map(m=>{
+    const v=isG
+      ? keys.reduce((s,k)=>s+getPresenzeG(k,m),0).toFixed(1)
+      : DA.fmt(keys.reduce((s,k)=>s+getPresenze(k,m),0));
+    return `<td class="num" style="font-weight:600;color:var(--accent2)">${v}</td>`;
+  }).join('');
+  const grandTot=keys.reduce((s,k)=>s+mesi.reduce((sm,m)=>sm+(pm[k]?.[m]||0),0),0);
+  const summaryTot=isG
+    ? (keys.reduce((s,k)=>s+mesi.reduce((sm,m)=>{
+        const gg=gg_arr[m]||30; return sm+(pm[k]?.[m]||0)/gg;
+      },0),0)/mesi.length/keys.length).toFixed(1)
+    : DA.fmt(grandTot);
+  const totRow=`<tr style="background:rgba(59,130,246,.06)">
+    <td style="font-weight:700">TOTALE</td><td></td><td></td>${totCells}
+    <td class="num" style="font-weight:700;color:var(--accent2)">${summaryTot}</td></tr>`;
+
+  document.getElementById('t-presenze').innerHTML=ths+'<tbody>'+rows+totRow+'</tbody>';
+}
+
+// ─────────────────────────────────────────────────────────────
+// MAIN
+// ─────────────────────────────────────────────────────────────
+// ─── BULLET CHART: utilizzo posti per CdC ───────────────────────────
+function renderBulletUtilizzo(){
+  const cdcSel = document.getElementById('f-cdc')?.value || 'all';
+  const keys = cdcSel === 'all'
+    ? ['PISA','RIETI','DROSSO','LORANZE','VICENZA','MODENA','VICO','CAMBO']
+    : [cdcSel];
+
+  // Per ogni CdC: posti totali (da CDC_STRUTTURE), ospiti medi (presenze/365 standard)
+  const rows = keys.map(k => {
+    const posti  = DA.getPostiTotali(k) || (DA.CDC[k]?.posti_max || 0);
+    const ospStd = DA.OSPITI_MEDI[k] || 0;
+    const ospAtt = DA.OSPITI_MEDI_ATTIVI[k] || 0;
+    const pres   = DA.PRESENZE_EST[k] || 0;
+    const pct    = posti > 0 ? Math.min(120, (ospStd / posti * 100)) : 0;
+    const pctAtt = posti > 0 ? Math.min(120, (ospAtt / posti * 100)) : 0;
+    const cdc    = DA.CDC[k] || {};
+    return { k, label: cdc.label, color: cdc.color, posti, ospStd, ospAtt, pct, pctAtt, pres };
+  }).filter(r => r.posti > 0);
+
+  // Ordina per pct decrescente
+  rows.sort((a,b) => b.pct - a.pct);
+
+  // Genera barra orizzontale per ogni CdC
+  let html = '';
+  rows.forEach(r => {
+    const barColor = r.pct >= 85 ? '#10b981' : r.pct >= 60 ? '#f59e0b' : '#ef4444';
+    const barWidth = Math.min(100, r.pct);
+    const overflow = r.pct > 100 ? r.pct - 100 : 0;
+    const targetLine = `<div style="position:absolute;left:85%;top:-2px;bottom:-2px;width:2px;background:#94a3b8aa;z-index:2"></div>`;
+    html += `<div style="display:grid;grid-template-columns:120px 1fr 160px;gap:10px;align-items:center;font-size:11px">
+      <div style="font-weight:700;color:var(--text1)">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${r.color};margin-right:6px"></span>
+        ${r.label}
+      </div>
+      <div style="position:relative;height:24px;background:rgba(148,163,184,.10);border-radius:4px;overflow:visible">
+        ${targetLine}
+        <div style="height:100%;width:${barWidth}%;background:${barColor};border-radius:4px;
+                    display:flex;align-items:center;justify-content:flex-end;padding-right:6px;
+                    color:#fff;font-weight:700;font-size:10.5px;text-shadow:0 1px 2px rgba(0,0,0,.4)">
+          ${r.pct >= 15 ? r.pct.toFixed(0) + '%' : ''}
+        </div>
+        ${overflow > 0 ? `<div style="position:absolute;left:100%;top:0;height:100%;width:${Math.min(20,overflow)}%;background:#0891b2;border-radius:0 4px 4px 0;display:flex;align-items:center;padding:0 4px;color:#fff;font-size:9px;font-weight:700">+${overflow.toFixed(0)}%</div>` : ''}
+      </div>
+      <div style="font-size:10.5px;color:var(--text2);text-align:right">
+        <strong style="color:var(--text1)">${r.ospStd}</strong> / ${r.posti} posti
+        ${r.ospAtt > r.ospStd * 1.2 ? `<br><span style="color:#06b6d4;font-size:9px">attivo: ${r.ospAtt}/${r.posti}</span>` : ''}
+      </div>
+    </div>`;
+  });
+  // Legenda target
+  html += `<div style="font-size:9.5px;color:var(--text3);font-style:italic;padding-top:6px;border-top:1px dashed var(--border);margin-top:4px">
+    Linea grigia = target 85% capienza · Box ciano = overflow su mesi attivi (CdC parzialmente operativi)
+  </div>`;
+  document.getElementById('bullet-utilizzo').innerHTML = html;
+}
+
+function renderAll(){
+  DA.chartDefaults(Chart);
+  renderKpi();
+  renderBulletUtilizzo();
+  renderPresStack();
+  renderPresLine();
+  renderPresPie();
+  renderOspitiG();
+  renderTipo();
+  renderTable();
+}
+document.addEventListener('DOMContentLoaded', renderAll);
+</script>
+</body>
+</html>

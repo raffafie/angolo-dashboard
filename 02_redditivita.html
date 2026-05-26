@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="athena-static-only" content="true"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Redditività — Dashboard Analytics</title>
+<link rel="stylesheet" href="shared/style.css?v=20260525-1800">
+</head>
+<body data-page="redd">
+<div id="topbar" class="topbar"></div>
+<div id="data-mode-bar" class="data-bar static mb-16"><span class="dot"></span>Caricamento dati...</div>
+
+<div class="main">
+
+  <div class="page-header">
+    <h1><span class="icon">💰</span> Redditività &amp; Fatturato</h1>
+    <p>Margini operativi, prodie costo, confronto MoM — Dati reali Zoho Analytics</p>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="filters">
+    <label>Anno:</label>
+    <select id="f-anno" onchange="renderAll()">
+      <option value="2025" selected>2025 (consuntivo)</option>
+      <option value="2026">2026 (Gen-Feb reale + forecast)</option>
+    </select>
+    <label>Mese:</label>
+    <select id="f-mese" onchange="renderAll()">
+      <option value="all">Tutto l'anno</option>
+      <option value="0">Gennaio</option><option value="1">Febbraio</option>
+      <option value="2">Marzo</option><option value="3">Aprile</option>
+      <option value="4">Maggio</option><option value="5">Giugno</option>
+      <option value="6">Luglio</option><option value="7">Agosto</option>
+      <option value="8">Settembre</option><option value="9">Ottobre</option>
+      <option value="10">Novembre</option><option value="11">Dicembre</option>
+    </select>
+    <label>Centro:</label>
+    <select id="f-cdc" onchange="renderAll()">
+      <option value="all">Tutti</option>
+      <option value="PISA">CAS PISA</option>
+      <option value="RIETI">CAD RIETI</option>
+      <option value="DROSSO">DROSSO</option>
+      <option value="LORANZE">LORANZÈ</option>
+      <option value="VICENZA">VICENZA</option>
+      <option value="MODENA">MODENA IMMIGRAZIONE</option>
+      <option value="VICO">VICO-VALCHIUSA</option>
+      <option value="CAMBO">CAMPOBASSO</option>
+    </select>
+    <button class="btn-apply" onclick="renderAll()">↻ Aggiorna</button>
+  </div>
+
+  <!-- KPI -->
+  <div class="kpi-grid" id="kpi-redd"></div>
+
+  <!-- Charts row 1 -->
+  <div class="chart-grid cols-full">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#3b82f6"></span>Fatturato &amp; Costi mensili — Confronto multi-centro <span class="sub">€ valori assoluti</span></div>
+      <div class="chart-wrap" style="height:320px"><canvas id="c-fatt-costi"></canvas></div>
+    </div>
+  </div>
+
+  <div class="chart-grid cols-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#10b981"></span>Margine operativo mensile (€)</div>
+      <div class="chart-wrap" style="height:250px"><canvas id="c-margine"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#8b5cf6"></span>Margine % (Redd / Fatturato)</div>
+      <div class="chart-wrap" style="height:250px"><canvas id="c-margine-pct"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Prodie -->
+  <div class="chart-grid cols-2">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#f59e0b"></span>Prodie Costo mensile per CdC (€/presenza)</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-prodie"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#ec4899"></span>Fatturato per CdC — distribuzione annua</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="c-fatt-pie"></canvas></div>
+    </div>
+  </div>
+
+  <!-- MoM Growth -->
+  <div class="chart-grid cols-full">
+    <div class="chart-card">
+      <div class="chart-title"><span class="dot" style="background:#06b6d4"></span>Fatturato MoM — Crescita mese su mese (%)</div>
+      <div class="chart-wrap" style="height:220px"><canvas id="c-mom"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Tabella dettaglio -->
+  <div class="section-title">📋 Dettaglio Redditività per CdC</div>
+  <div class="chart-card">
+    <div style="overflow-x:auto"><table class="data-table" id="t-redd"></table></div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<script src="shared/data.js?v=20260525-1800"></script>
+<script src="shared/filters.js?v=20260525-1800"></script>
+<script src="shared/live.js?v=20260525-1800"></script>
+<script src="shared/nav.js?v=20260525-1800"></script>
+<script>
+const KEYS = ['PISA','DROSSO','LORANZE','VICENZA','RIETI','MODENA','VICO','CAMBO'];
+
+function getAnno(){ return parseInt(document.getElementById('f-anno')?.value||2025); }
+function getRedd(){ return DA.getRedd(getAnno()); }
+function activeCdcs(){
+  const v=document.getElementById('f-cdc')?.value||'all';
+  return v==='all'?KEYS:[v];
+}
+function activeMesi(){
+  const v=document.getElementById('f-mese')?.value||'all';
+  return v==='all'?[...Array(12).keys()]:[parseInt(v)];
+}
+
+function renderKpi(){
+  const keys=activeCdcs(); const mesi=activeMesi();
+  const REDD=getRedd();
+  let tF=0,tC=0;
+  keys.forEach(k=>mesi.forEach(m=>{tF+=REDD[k].f[m]||0;tC+=REDD[k].c[m]||0;}));
+  const tR=tF-tC, rPct=tF>0?(tR/tF*100).toFixed(1):0;
+  const avgProd=DA.avg(keys.map(k=>DA.avg(mesi.map(m=>REDD[k].p[m]).filter(v=>v!=null))));
+
+  const kpis=[
+    {icon:'💶',val:'€'+DA.fmtK(tF),  label:'Fatturato periodo',    col:'kpi-blue'},
+    {icon:'🧾',val:'€'+DA.fmtK(tC),  label:'Costi periodo',        col:'kpi-amber'},
+    {icon:'📈',val:'€'+DA.fmtK(tR),  label:'Margine €',            col:tR>0?'kpi-green':'kpi-red'},
+    {icon:'💹',val:rPct+'%',          label:'Margine %',            col:tR>0?'kpi-green':'kpi-red'},
+    {icon:'📊',val:'€'+avgProd.toFixed(2),label:'Prodie medio',    col:'kpi-violet'},
+  ];
+  document.getElementById('kpi-redd').innerHTML=kpis.map(k=>`
+    <div class="kpi-card ${k.col}">
+      <div class="kpi-icon">${k.icon}</div>
+      <div class="kpi-val">${k.val}</div>
+      <div class="kpi-label">${k.label}</div>
+    </div>`).join('');
+}
+
+function renderFattCosti(){
+  const keys=activeCdcs();
+  const mesi=activeMesi();
+  const labels=mesi.map(m=>DA.MESI_LABEL[m]);
+  const REDD=getRedd();
+
+  if(keys.length===1){
+    const k=keys[0];
+    DA.mkChart('c-fatt-costi',{type:'bar',
+      data:{labels,datasets:[
+        {label:'Fatturato',data:mesi.map(m=>REDD[k].f[m]||0),backgroundColor:'#3b82f6bb',borderColor:'#3b82f6',borderWidth:1,borderRadius:3},
+        {label:'Costi',    data:mesi.map(m=>REDD[k].c[m]||0),backgroundColor:'#f59e0bbb',borderColor:'#f59e0b',borderWidth:1,borderRadius:3},
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},
+        scales:{y:{title:{display:true,text:'Euro (€)',color:'#546a87'}}}}
+    });
+  } else {
+    const fTot = mesi.map(m=>keys.reduce((s,k)=>s+(REDD[k].f[m]||0),0));
+    const cTot = mesi.map(m=>keys.reduce((s,k)=>s+(REDD[k].c[m]||0),0));
+    const rTot = mesi.map((_,i)=>fTot[i]-cTot[i]);
+    DA.mkChart('c-fatt-costi',{type:'bar',
+      data:{labels,datasets:[
+        {label:'Fatturato tot',data:fTot,backgroundColor:'#3b82f6bb',borderColor:'#3b82f6',borderWidth:1,borderRadius:3},
+        {label:'Costi tot',    data:cTot,backgroundColor:'#f59e0bbb',borderColor:'#f59e0b',borderWidth:1,borderRadius:3},
+        {label:'Margine',      data:rTot,type:'line',borderColor:'#10b981',backgroundColor:'#10b98122',
+         borderWidth:2,pointRadius:4,yAxisID:'y2',fill:true,tension:.3},
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},
+        scales:{
+          y:{title:{display:true,text:'Euro (€)',color:'#546a87'}},
+          y2:{position:'right',title:{display:true,text:'Margine (€)',color:'#10b981'},grid:{drawOnChartArea:false}}
+        }}
+    });
+  }
+}
+
+function renderMargine(){
+  const keys=activeCdcs();
+  const mesi=activeMesi();
+  const labels=mesi.map(m=>DA.MESI_LABEL[m]);
+  const REDD=getRedd();
+  const datasets=keys.map(k=>({
+    label:DA.CDC[k].label,
+    data:mesi.map(m=>(REDD[k].f[m]||0)-(REDD[k].c[m]||0)),
+    borderColor:DA.CDC[k].color,
+    backgroundColor:DA.CDC[k].color+'22',
+    borderWidth:2,pointRadius:3,tension:.3,fill:keys.length===1,
+  }));
+  DA.mkChart('c-margine',{type:'line',data:{labels,datasets},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},
+      scales:{y:{title:{display:true,text:'€',color:'#546a87'}}}}
+  });
+}
+
+function renderMarginePct(){
+  const keys=activeCdcs();
+  const mesi=activeMesi();
+  const labels=mesi.map(m=>DA.MESI_LABEL[m]);
+  const REDD=getRedd();
+  const datasets=keys.map(k=>({
+    label:DA.CDC[k].label,
+    data:mesi.map(m=>{ const f=REDD[k].f[m]||0,c=REDD[k].c[m]||0; return f>0?parseFloat(((f-c)/f*100).toFixed(1)):null; }),
+    borderColor:DA.CDC[k].color,
+    backgroundColor:DA.CDC[k].color+'22',
+    borderWidth:2,pointRadius:3,tension:.3,
+  }));
+  DA.mkChart('c-margine-pct',{type:'line',data:{labels,datasets},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},
+      scales:{y:{title:{display:true,text:'%',color:'#546a87'}}}}
+  });
+}
+
+function renderProdie(){
+  const keys=activeCdcs();
+  const mesi=activeMesi();
+  const labels=mesi.map(m=>DA.MESI_LABEL[m]);
+  const REDD=getRedd();
+  const datasets=keys.map(k=>({
+    label:DA.CDC[k].label,
+    data:mesi.map(m=>REDD[k].p[m]),
+    borderColor:DA.CDC[k].color,
+    backgroundColor:DA.CDC[k].color+'33',
+    borderWidth:2,pointRadius:3,tension:.3,fill:false,
+  }));
+  DA.mkChart('c-prodie',{type:'line',data:{labels,datasets},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},
+      scales:{y:{title:{display:true,text:'€/presenza',color:'#546a87'}}}}
+  });
+}
+
+function renderFattPie(){
+  const keys=activeCdcs();
+  const REDD=getRedd();
+  const vals=keys.map(k=>DA.sum(REDD[k].f));
+  DA.mkChart('c-fatt-pie',{type:'doughnut',
+    data:{labels:keys.map(k=>DA.CDC[k].label),
+      datasets:[{data:vals,backgroundColor:keys.map(k=>DA.CDC[k].color+'cc'),borderColor:'#0d1526',borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
+      plugins:{legend:{position:'right',labels:{font:{size:11}}}}}
+  });
+}
+
+function renderMoM(){
+  const keys=activeCdcs();
+  const REDD=getRedd();
+  // MoM sempre su tutti i 12 mesi per vedere il trend completo
+  const allMesi=[...Array(12).keys()];
+  const fTot=allMesi.map(m=>keys.reduce((s,k)=>s+(REDD[k].f[m]||0),0));
+  const mom=fTot.map((v,i)=>{
+    if(i===0||fTot[i-1]===0)return null;
+    return parseFloat(((v-fTot[i-1])/fTot[i-1]*100).toFixed(1));
+  });
+  DA.mkChart('c-mom',{type:'bar',
+    data:{labels:DA.MESI_LABEL,datasets:[{
+      label:'Crescita MoM (%)',data:mom,
+      backgroundColor:mom.map(v=>v===null?'transparent':v>=0?'#10b981bb':'#ef4444bb'),
+      borderColor:mom.map(v=>v===null?'transparent':v>=0?'#10b981':'#ef4444'),
+      borderWidth:1,borderRadius:4,
+    }]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{title:{display:true,text:'%',color:'#546a87'}}}}
+  });
+}
+
+function renderTable(){
+  const keys=activeCdcs();
+  const mesi=activeMesi();
+  const REDD=getRedd();
+  const mLbls=mesi.map(m=>DA.MESI_LABEL[m]);
+  const ths='<thead><tr><th>Centro</th>'+mLbls.map(m=>`<th>${m}</th>`).join('')+'<th>Totale</th><th>Marg.%</th></tr></thead>';
+  const rows=keys.map(k=>{
+    const cdc=DA.CDC[k];
+    const cells=mesi.map(m=>{
+      const r=(REDD[k].f[m]||0)-(REDD[k].c[m]||0);
+      const cls=r>0?'pos':r<0?'neg':'neutral';
+      return `<td class="num ${cls}">${r===0?'-':(r>0?'+':'')+DA.fmt(r)}</td>`;
+    }).join('');
+    const totF=mesi.reduce((s,m)=>s+(REDD[k].f[m]||0),0);
+    const totC=mesi.reduce((s,m)=>s+(REDD[k].c[m]||0),0);
+    const totR=totF-totC;
+    const pct=totF>0?(totR/totF*100).toFixed(1):'N/D';
+    return `<tr>
+      <td><span class="cdc-pill ${cdc.pill}">${cdc.label}</span></td>
+      ${cells}
+      <td class="num ${totR>0?'pos':'neg'}" style="font-weight:600">${totR>0?'+':''}€${DA.fmtK(Math.abs(totR))}</td>
+      <td class="num ${totR>0?'pos':'neg'}">${pct}%</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('t-redd').innerHTML=ths+'<tbody>'+rows+'</tbody>';
+}
+
+function renderAll(){
+  DA.chartDefaults(Chart);
+  renderKpi(); renderFattCosti(); renderMargine(); renderMarginePct();
+  renderProdie(); renderFattPie(); renderMoM(); renderTable();
+}
+document.addEventListener('DOMContentLoaded',renderAll);
+</script>
+</body>
+</html>
