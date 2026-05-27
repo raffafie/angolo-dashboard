@@ -31,7 +31,7 @@ DA.CDC = {
   DROSSO:  { label:'DROSSO',                codice:'ANGOLO3',  tipo:'CC',  posti_max:290, color:'#8b5cf6', pill:'pill-drosso',  retta:57.00 }, // 1 CC Fragili 120 + 2 CD Diffusa 170; contratto quadro
   LORANZE: { label:'LORANZÈ',               codice:'ANGOLO4',  tipo:'CC',  posti_max: 90, color:'#f59e0b', pill:'pill-loranze', retta:32.00 }, // 1 CC (CC9 90p)
   VICENZA: { label:'VICENZA',               codice:'ANGOLO7',  tipo:'SUA', posti_max:117, color:'#ec4899', pill:'pill-vicenza', retta:45.00 }, // 4 CD (CAS1 34+CAS2 33+CAS3 40+CAS MSNA 10)
-  MODENA:  { label:'MODENA IMMIGRAZIONE',   codice:'ANGOLO6',  tipo:'CC',  posti_max:844, color:'#06b6d4', pill:'pill-modena',  retta:36.00 }, // 9 CC (526p inc. CC4 chiuso) + 6 CAD (318p) = 15 centri autorizzati Zoho
+  MODENA:  { label:'MODENA IMMIGRAZIONE',   codice:'ANGOLO6',  tipo:'CC',  posti_max:740, color:'#06b6d4', pill:'pill-modena',  retta:36.00 }, // capacità reale 740 = 657 attive + 83 disponibili (escl. HYMA pulizie 50 + CC4 chiuso 54 + dismesse)
   VICO:    { label:'VICO-VALCHIUSA',        codice:'ANGOLO8',  tipo:'SUA', posti_max: 18, color:'#ef4444', pill:'pill-vico',    retta:57.00 }, // 1 CC Fragili (VC2 13) + 1 CD Diffusa (VC3 5); contratto quadro
   CAMBO:   { label:'CAMPOBASSO',            codice:'ANGOLO13', tipo:'CC',  posti_max:100, color:'#6366f1', pill:'pill-cambo',   retta:35.00 }, // 1 CC (CC11 100p); attivo da Ago 2025
 };
