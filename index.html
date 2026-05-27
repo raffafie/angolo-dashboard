@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="athena-static-only" content="true"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Dashboard Analytics — Cooperativa Angolo</title>
-<link rel="stylesheet" href="shared/style.css?v=20260527-1100">
+<link rel="stylesheet" href="shared/style.css?v=20260527-1400">
 <style>
 /* ── RESET & BASE ─────────────────────────────────────────── */
 * { box-sizing:border-box; }
@@ -381,10 +381,10 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
-<script src="shared/data.js?v=20260527-1100"></script>
-<script src="shared/filters.js?v=20260527-1100"></script>
-<script src="shared/live.js?v=20260527-1100"></script>
-<script src="shared/nav.js?v=20260527-1100"></script>
+<script src="shared/data.js?v=20260527-1400"></script>
+<script src="shared/filters.js?v=20260527-1400"></script>
+<script src="shared/live.js?v=20260527-1400"></script>
+<script src="shared/nav.js?v=20260527-1400"></script>
 <script>
 document.addEventListener('DOMContentLoaded', ()=>{
   DA.chartDefaults(Chart);
@@ -917,7 +917,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
           el.style.display = 'inline';
           el.querySelector('.cdc-live-val').textContent = Math.round(presenze);
           const satTxt = d.saturazione_pct != null ? ` · saturazione ${d.saturazione_pct}%` : '';
-          el.title = `Ospiti presenti (Zoho, rilevazione ${dataRil}): ${presenze}${satTxt} · media giorno (prodie): ${prodie?.toFixed?.(1) ?? prodie}`;
+          // Dettaglio capacità attive vs autorizzate (rilevante per CdC con strutture disponibili, es. MODENA)
+          let capTxt = '';
+          if (d.capacita_attive != null && d.capacita != null && d.capacita_attive !== d.capacita) {
+            capTxt = ` · capacità ${d.capacita} autorizz. (${d.capacita_attive} attive + ${d.capacita - d.capacita_attive} disponibili)`;
+          }
+          el.title = `Ospiti presenti (Zoho, rilevazione ${dataRil}): ${presenze}${satTxt}${capTxt} · media giorno (prodie): ${prodie?.toFixed?.(1) ?? prodie}`;
         }
       });
     } catch (e) {
