@@ -1,0 +1,25 @@
+{
+  "generated_at": "2026-06-04T08:27:33.234840Z",
+  "year": "2026",
+  "prev_year": "2025",
+  "files": [
+    "saturazione.json",
+    "costi-confronto-2026.json",
+    "costi-confronto-2025.json",
+    "redditivita-mensile-2026.json",
+    "redditivita-mensile-2025.json",
+    "hr-snapshot-2026.json",
+    "hr-snapshot-2025.json",
+    "presenze-mensili-2026.json",
+    "presenze-mensili-2025.json",
+    "ticket-immobili.json",
+    "turnover-2026.json",
+    "turnover-2025.json",
+    "hr-movements-2026.json",
+    "hr-movements-2025.json",
+    "ore-incidenza.json",
+    "mappatura-mansioni.json"
+  ],
+  "ok_count": 14,
+  "err_count": 2
+}

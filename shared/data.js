@@ -38,68 +38,63 @@ DA.CDC = {
 DA.CDC_KEYS = ['PISA','RIETI','DROSSO','LORANZE','VICENZA','MODENA','VICO','CAMBO'];
 DA.CDC_ACTIVE = ['PISA','RIETI','DROSSO','LORANZE','VICENZA','VICO']; // hanno dati Zoho completi
 
-// ── REDDITIVITA' CENTRI 2025 (da Zoho: Redditività Centri) ─
-// Dati mensili: [fatturato, costi, redditività, prodie_costo]
-// Fonte: zoho_export "Redditività Centri"
-DA.REDD = {
-  PISA: {
-    f: [147135,134201,147220,143858,150413,147607,154066,156751,147607,174583,177089,181864],
-    c: [121904,119005,115405,111714,138573,137601,130035,136334,135286,150362,141361,139715],
-    p: [19.62,21.15,18.96,18.78,22.29,22.55,20.42,21.04,22.17,22.72,21.06,20.26],
-  },
-  RIETI: {
-    f: [73365,62853,63557,54868,52211,55141,58531,66810,60097,56560,68877,73975],
-    c: [62768,58030,57343,62750,64431,57032,58364,57843,53703,57772,65548,70195],
-    p: [20.87,22.32,20.91,26.50,28.40,24.85,23.98,20.66,21.79,24.91,23.21,23.14],
-  },
-  DROSSO: {
-    f: [360454,128052,139585,135083,139266,134211,342940,345456,343741,359670,347497,357193],
-    c: [219883,244736,202266,209412,204897,196838,211181,209662,208108,205284,218145,45705],
-    p: [25.04,31.62,23.81,25.48,24.19,24.22,25.55,24.91,24.76,23.39,25.72,5.24],
-  },
-  LORANZE: {
-    f: [79036,69930,76049,73351,82822,76839,85111,81218,76064,86455,80120,81975],
-    c: [82074,66180,74115,66673,75464,68197,77917,68630,66675,62710,73867,36045],
-    p: [32.27,29.41,30.56,28.42,28.57,27.98,28.24,26.07,27.04,23.03,27.43,12.97],
-  },
-  VICENZA: {
-    f: [109056,96380,108956,101276,104427,96582,102095,107183,106021,111314,18578,0],
-    c: [83551,85879,95316,86721,76789,77467,78068,72622,81034,38544,39968,0],
-    p: [24.12,28.07,27.71,25.55,21.76,23.80,22.71,20.18,23.00,10.64,11.15,13.12],
-  },
-  MODENA: {
-    f: [0,0,0,0,0,0,0,0,0,0,0,0],
-    c: [0,0,0,0,0,0,0,0,0,0,0,0],
-    p: [null,null,null,null,null,null,null,null,null,null,null,null],
-    note: 'Fatturazione non registrata in Zoho — gestione separata'
-  },
-  VICO: {
-    f: [31043,2440,2702,2615,2702,2615,25729,25729,24899,25729,23928,23958],
-    c: [45006,40770,36608,37256,37287,41814,35356,32139,32057,44746,37052,28555],
-    p: [76.41,76.64,62.36,76.66,75.18,87.11,71.28,64.80,67.21,93.81,82.34,61.41],
-  },
-  CAMBO: {
-    f: [0,0,0,0,0,0,0,0,0,0,0,0],
-    c: [0,0,0,0,0,0,0,0,0,0,0,0],
-    p: [null,null,null,null,null,null,null,null,null,null,null,null],
-    note: 'Dati non disponibili in Zoho Analytics'
-  },
-};
+// ── REDDITIVITA' CENTRI — strutture inizializzate vuote, popolate LIVE da DA.loadReddLive()
+// [M10] Rimossi snapshot statici 2025. Tutto live da /api/dashboard/redditivita-mensile
+// Fonte: Zoho Analytics "Presenze Ospiti Centro" + "Redditività"
+// I render aspettano DA.loadReddLive(anno) PRIMA di disegnare i grafici.
+DA.REDD = (function(){
+  const zero12 = () => new Array(12).fill(0);
+  const r = {};
+  ['PISA','RIETI','DROSSO','LORANZE','VICENZA','MODENA','VICO','CAMBO'].forEach(k=>{
+    r[k] = { f: zero12(), c: zero12(), p: zero12() };
+  });
+  return r;
+})();
 
-// ── TOTALI ANNUI 2025 ─────────────────────────────────────
-// Fonte: Zoho "Redditività Centri" (serie mensile 2025) — Aprile 2026
-// NOTA: valori derivati dalla somma serie mensile DA.REDD per coerenza interna grafici
-// CAMBO: totale da query GRAFICO REDDITIVITA' (serie mensile assente in Zoho per questo CdC)
-// MODENA: fatturazione non gestita in Zoho Analytics
-DA.ANNO2025 = {
-  PISA:    { f:1862395, c:1577295, r:285101,  prodie:20.92 },
-  RIETI:   { f:746845,  c:725779,  r:21066,   prodie:23.46 },
-  DROSSO:  { f:3133147, c:2376116, r:757031,  prodie:23.66 },
-  LORANZE: { f:948971,  c:818547,  r:130424,  prodie:26.83 },
-  VICENZA: { f:1061868, c:815959,  r:245909,  prodie:21.70 },
-  MODENA:  { f:0,       c:4738277, r:0,       prodie:19.86, note:'Fatturazione non in Zoho; prodie = solo costo personale/presenze (sottostima)' },
-  VICO:    { f:194087,  c:448647,  r:-254560, prodie:74.60 },
-  CAMBO:   { f:120843,  c:82872,   r:37971,   prodie:13.64, note:'Attivo da Ago 2025 — dati parziali 5 mesi' },
+// ── TOTALI ANNUI — strutture vuote, popolate LIVE da DA.loadReddLive()
+// [M10] Rimossi snapshot statici. I valori vengono calcolati da SUM serie mensile live.
+DA.ANNO2025 = (function(){
+  const r = {};
+  ['PISA','RIETI','DROSSO','LORANZE','VICENZA','MODENA','VICO','CAMBO'].forEach(k=>{
+    r[k] = { f: 0, c: 0, r: 0, prodie: 0 };
+  });
+  return r;
+})();
+
+// [M2/M8] Sovrascrive DA.REDD e DA.ANNO2025 con dati LIVE da Zoho via /api/dashboard/redditivita-mensile.
+// Chiamare in fase DOMContentLoaded prima di renderAll() in 01_presenze, 02_redditivita, index.
+// Mantiene retro-compatibilità con tutti i grafici esistenti che usano DA.REDD[k].f/c/p e DA.ANNO2025[k].f/c/r/prodie.
+DA.loadReddLive = async function(anno){
+  anno = anno || '2025';
+  if(!window.LIVE || !LIVE.getRedditivitaMensile) return false;
+  // Scegli target struttura (2025 o 2026) in base all'anno
+  const reddTarget = (anno === '2026') ? DA.REDD_2026 : DA.REDD;
+  const annoTarget = (anno === '2026') ? DA.ANNO2026 : DA.ANNO2025;
+  try {
+    const d = await LIVE.getRedditivitaMensile(anno);
+    if(!d || !d.by_cdc) return false;
+    Object.entries(d.by_cdc).forEach(([k, v])=>{
+      if(reddTarget[k]){
+        reddTarget[k].f = v.ricavo.map(x=>+x);
+        reddTarget[k].c = v.costi.map(x=>+x);
+        reddTarget[k].p = v.prodie.map(x=> x > 0 ? +x : null);
+      }
+      const totF = v.ricavo.reduce((s,x)=>s+(+x||0), 0);
+      const totC = v.costi.reduce((s,x)=>s+(+x||0), 0);
+      const totM = v.margine.reduce((s,x)=>s+(+x||0), 0);
+      const presOk = v.presenze.reduce((s,x)=>s+(+x||0), 0);
+      if(annoTarget[k]){
+        annoTarget[k].f = Math.round(totF);
+        annoTarget[k].c = Math.round(totC);
+        annoTarget[k].r = Math.round(totM);
+        if(presOk > 0 && totC > 0) annoTarget[k].prodie = +(totC/presOk).toFixed(2);
+        if(annoTarget[k].presenze !== undefined) annoTarget[k].presenze = Math.round(presOk);
+      }
+    });
+    DA._reddLiveLoaded = { anno, ts: new Date().toISOString() };
+    console.log(`[data.js] REDD LIVE ${anno} caricato per ${Object.keys(d.by_cdc).length} CdC`);
+    return true;
+  } catch(e){ console.warn('[data.js] loadReddLive error', e); return false; }
 };
 
 // ── REDDITIVITA' 2026 — DATI REALI DA ZOHO ─────────────────────────────────
@@ -119,60 +114,22 @@ DA.ANNO2025 = {
 // - 'p' = prodie costo (Costo Centro/Presenze, fallback su Costo Pers Effett/Presenze)
 //
 // IMPORTANTE: VICO ha sempre fatturazione Zoho incompleta — usare RETTE_CDC come riferimento
-DA.REDD_2026 = {
-  PISA:    { f:[179146.58, 153004.0, 153637.12, 130290.82, 0,0,0,0,0,0,0,0],
-             c:[193208.97,  50734.38, 0, 0, 0,0,0,0,0,0,0,0],
-             cp:[52588.81,  50734.38, 0, 0, 0,0,0,0,0,0,0,0],
-             r:[38526.42,    0,       0, 0, 0,0,0,0,0,0,0,0],
-             p:[20.71,       8.75,    0, 0, 0,0,0,0,0,0,0,0] },
-  RIETI:   { f:[72609.03, 67413.96, 74682.18, 63926.19, 0,0,0,0,0,0,0,0],
-             c:[22499.61, 20823.36, 0, 0, 0,0,0,0,0,0,0,0],
-             cp:[22499.61, 20823.36, 0, 0, 0,0,0,0,0,0,0,0],
-             r:[0,0,0,0, 0,0,0,0,0,0,0,0],
-             p:[7.56, 7.53, 0, 0, 0,0,0,0,0,0,0,0] },
-  DROSSO:  { f:[354263.57, 323561.94, 214789.26, 296531.92, 0,0,0,0,0,0,0,0],
-             c:[94382.36, 94785.09, 0, 0, 0,0,0,0,0,0,0,0],
-             cp:[48029.55, 48198.9, 0, 0, 0,0,0,0,0,0,0,0],
-             r:[307910.76, 276975.75, 214789.26, 0, 0,0,0,0,0,0,0,0],
-             p:[5.37, 5.92, 0, 0, 0,0,0,0,0,0,0,0] },
-  LORANZE: { f:[78361.18, 51085.75, 51141.66, 39980.04, 0,0,0,0,0,0,0,0],
-             c:[58892.14, 55907.91, 0, 0, 0,0,0,0,0,0,0,0],
-             cp:[24252.6, 22419.74, 0, 0, 0,0,0,0,0,0,0,0],
-             r:[43721.64, 17597.58, 0, 0, 0,0,0,0,0,0,0,0],
-             p:[13.13, 20.81, 0, 0, 0,0,0,0,0,0,0,0] },
-  VICENZA: { f:[106977.03, 98444.49, 107974.64, 91242.21, 0,0,0,0,0,0,0,0],
-             c:[41090.36, 39149.55, 0, 0, 0,0,0,0,0,0,0,0],
-             cp:[41090.36, 39149.55, 0, 0, 0,0,0,0,0,0,0,0],
-             r:[0,0,0,0, 0,0,0,0,0,0,0,0],
-             p:[11.34, 11.74, 0, 0, 0,0,0,0,0,0,0,0] },
-  MODENA:  { f:[632062.16, 564480.65, 617409.45, 529725.97, 0,0,0,0,0,0,0,0],
-             c:[190839.7, 185767.19, 0, 0, 0,0,0,0,0,0,0,0],
-             cp:[190839.7, 185767.19, 0, 0, 0,0,0,0,0,0,0,0],
-             r:[0,0,0,0, 0,0,0,0,0,0,0,0],
-             p:[10.26, 11.18, 0, 0, 0,0,0,0,0,0,0,0] },
-  VICO:    { f:[23957.73, 21639.24, 21256.08, 20866.41, 0,0,0,0,0,0,0,0],
-             c:[63768.47, 63544.8, 0, 0, 0,0,0,0,0,0,0,0],
-             cp:[35556.94, 35366.12, 0, 0, 0,0,0,0,0,0,0,0],
-             r:[-4253.8, -6539.44, 21256.08, 0, 0,0,0,0,0,0,0,0],
-             p:[60.67, 67.09, 0, 0, 0,0,0,0,0,0,0,0] },
-  CAMBO:   { f:[32893.0, 27908.25, 29781.5, 25209.5, 0,0,0,0,0,0,0,0],
-             c:[5668.13, 5908.44, 0, 0, 0,0,0,0,0,0,0,0],
-             cp:[5668.13, 5908.44, 0, 0, 0,0,0,0,0,0,0,0],
-             r:[0,0,0,0, 0,0,0,0,0,0,0,0],
-             p:[5.47, 6.72, 0, 0, 0,0,0,0,0,0,0,0] },
-};
-
-// Totali 2026 (Gen-Feb reali + Mar-Apr fatturato previsionale, costi solo Gen-Feb)
-DA.ANNO2026 = {
-  PISA:    { f:616079,  c:243943,  cp:103323, r:38526,  prodie:14.73, presenze:23354, mesi_full:2, mesi_prev:2 },
-  RIETI:   { f:278631,  c:43323,   cp:43323,  r:0,      prodie:7.54,  presenze:11424, mesi_full:2, mesi_prev:2 },
-  DROSSO:  { f:1189147, c:189167,  cp:96228,  r:799676, prodie:5.64,  presenze:32380, mesi_full:2, mesi_prev:2 },
-  LORANZE: { f:220569,  c:114800,  cp:46672,  r:61319,  prodie:16.97, presenze:7137,  mesi_full:2, mesi_prev:2 },
-  VICENZA: { f:404638,  c:80240,   cp:80240,  r:0,      prodie:11.54, presenze:13677, mesi_full:2, mesi_prev:2 },
-  MODENA:  { f:2343678, c:376607,  cp:376607, r:0,      prodie:10.72, presenze:68972, mesi_full:2, mesi_prev:2 },
-  VICO:    { f:87719,   c:127313,  cp:70923,  r:10463,  prodie:63.88, presenze:1755,  mesi_full:2, mesi_prev:2 },
-  CAMBO:   { f:115792,  c:11577,   cp:11577,  r:0,      prodie:6.09,  presenze:3647,  mesi_full:2, mesi_prev:2 },
-};
+// [M10] DA.REDD_2026 e DA.ANNO2026 strutture vuote, popolate LIVE via DA.loadReddLive('2026')
+DA.REDD_2026 = (function(){
+  const zero12 = () => new Array(12).fill(0);
+  const r = {};
+  ['PISA','RIETI','DROSSO','LORANZE','VICENZA','MODENA','VICO','CAMBO'].forEach(k=>{
+    r[k] = { f: zero12(), c: zero12(), cp: zero12(), r: zero12(), p: zero12() };
+  });
+  return r;
+})();
+DA.ANNO2026 = (function(){
+  const r = {};
+  ['PISA','RIETI','DROSSO','LORANZE','VICENZA','MODENA','VICO','CAMBO'].forEach(k=>{
+    r[k] = { f:0, c:0, cp:0, r:0, prodie:0, presenze:0, mesi_full:0, mesi_prev:0 };
+  });
+  return r;
+})();
 
 // ── COMPOSIZIONE COSTI 2025 (da Zoho: Composizione Costi Pivot) ─
 // Valori in euro, fonte reale Zoho Analytics

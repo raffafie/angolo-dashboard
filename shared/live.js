@@ -36,7 +36,7 @@
     if (bar) {
       if (FORCE_STATIC) {
         bar.className = 'data-bar static';
-        bar.innerHTML = '<span class="dot"></span>📦 Versione <strong>Standalone</strong> · dati statici Cooperativa Angolo (snapshot Aprile 2025) · nessuna connessione Zoho';
+        bar.innerHTML = '<span class="dot"></span>📦 Versione <strong>Standalone GitHub Pages</strong> · dati Zoho rigenerati ogni mattina 06:00 (snapshot via cron PC studio)';
       } else if (IS_LIVE) {
         bar.className = 'data-bar live';
         bar.innerHTML = '<span class="dot"></span>Dati live da Zoho <strong>Analytics</strong> + <strong>Creator</strong> — cache 5 min';
@@ -563,6 +563,50 @@
     }
   }
 
+  /* ── [M12] Static JSON loader — STANDALONE BUILD ────────────────
+   * Quando FORCE_STATIC è true, queste funzioni leggono JSON pre-renderizzati
+   * dalla cartella ./data/ (popolati ogni mattina alle 06:00 dal cron del PC studio).
+   */
+  const _staticJsonCache = {};
+  async function _fetchStaticJson(filename) {
+    if (_staticJsonCache[filename]) return _staticJsonCache[filename];
+    try {
+      const resp = await fetch('data/' + filename, { cache: 'no-cache' });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const json = await resp.json();
+      _staticJsonCache[filename] = json;
+      return json;
+    } catch (e) {
+      console.warn(`[live.js static] errore lettura data/${filename}`, e);
+      return null;
+    }
+  }
+
+  async function getCostiConfronto(anno, cdc) {
+    anno = anno || new Date().getFullYear().toString();
+    return _fetchStaticJson(`costi-confronto-${anno}.json`);
+  }
+  async function getRedditivitaMensile(anno) {
+    anno = anno || new Date().getFullYear().toString();
+    return _fetchStaticJson(`redditivita-mensile-${anno}.json`);
+  }
+  async function getHrSnapshot(anno) {
+    anno = anno || new Date().getFullYear().toString();
+    return _fetchStaticJson(`hr-snapshot-${anno}.json`);
+  }
+  async function getPresenzeMensili(anno) {
+    anno = anno || new Date().getFullYear().toString();
+    return _fetchStaticJson(`presenze-mensili-${anno}.json`);
+  }
+  async function getTicketImmobili(cdc) {
+    return _fetchStaticJson('ticket-immobili.json');
+  }
+
+  // Manifest con timestamp ultimo aggiornamento
+  async function getStaticManifest() {
+    return _fetchStaticJson('manifest.json');
+  }
+
   /* ── Esposizione pubblica ────────────────────────────────── */
   window.LIVE = {
     isLive: IS_LIVE,
@@ -590,6 +634,13 @@
     getHrMovements,
     getTurnover,
     getSaturazione,
+    // [M12] STANDALONE static JSON loaders — funzionano sia in static che in live
+    getCostiConfronto,
+    getRedditivitaMensile,
+    getHrSnapshot,
+    getPresenzeMensili,
+    getTicketImmobili,
+    getStaticManifest,
     fmt, fmtEur, pct, deltaClass, deltaIcon,
     MESI, MESI_FULL, CDC_LIST, getCdcMeta,
   };

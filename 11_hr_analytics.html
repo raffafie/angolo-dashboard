@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="athena-static-only" content="true"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>HR Analytics — Dashboard Analytics</title>
-<link rel="stylesheet" href="shared/style.css?v=20260527-1500">
+<link rel="stylesheet" href="shared/style.css?v=20260528-1200">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 /* ── Layout ──────────────────────────────────────────────── */
@@ -350,11 +350,11 @@
 
 </div><!-- /.main -->
 
-<script src="shared/nav.js?v=20260527-1500"></script>
-<script src="shared/data.js?v=20260527-1500"></script>
-<script src="shared/filters.js?v=20260527-1500"></script>
-<script src="shared/hr_data.js?v=20260527-1500"></script>
-<script src="shared/live.js?v=20260527-1500"></script>
+<script src="shared/nav.js?v=20260528-1200"></script>
+<script src="shared/data.js?v=20260528-1200"></script>
+<script src="shared/filters.js?v=20260528-1200"></script>
+<script src="shared/hr_data.js?v=20260528-1200"></script>
+<script src="shared/live.js?v=20260528-1200"></script>
 <script>
 // ═══════════════════════════════════════════════════════════
 // DATI EMBEDDED — generati da hr_data_final.py (join Matricola)
@@ -979,11 +979,52 @@ async function renderMansioniGrouped() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', ()=>{
+// [M7] Override LIVE: sovrascrive HR.HR_ORE_CDC / HR.HR_MANSIONI_CDC con dati Zoho live
+// Fonti: gestione-personale (Ripartizione_Organico_Mensile per MODENA/DROSSO/LORANZE — con nominativi)
+//        + Costo Personale Analytics per gli altri CdC (no nominativi).
+async function loadHrLive(){
+  if(!window.LIVE || !LIVE.getHrSnapshot) return 0;
+  try{
+    const anno = (typeof ANNO !== 'undefined' ? ANNO : '2025');
+    const d = await LIVE.getHrSnapshot(anno);
+    if(!d || !d.by_cdc) return 0;
+    let updated = 0;
+    Object.entries(d.by_cdc).forEach(([k, v])=>{
+      if(!HR.HR_ORE_CDC[k]) HR.HR_ORE_CDC[k] = {};
+      if(!HR.HR_ORE_CDC[k][anno]) HR.HR_ORE_CDC[k][anno] = {};
+      let cdcUpdates = 0;
+      v.ore_effettive.forEach((ore, i)=>{
+        if(ore > 0){
+          HR.HR_ORE_CDC[k][anno][String(i+1)] = {
+            lav: +ore, ret: +ore,
+            nott: 0, rep_d: 0, rep_n: +(v.ore_reperibilita[i] || 0),
+            fest_d: 0, fest_n: 0, spett: 0, giust: 0, banca: 0, assenze: 0,
+            n: +(v.persone[i] || 0), inc: 100, inc2: 100,
+          };
+          cdcUpdates++;
+        }
+      });
+      if(v.mansioni && Object.keys(v.mansioni).length > 0){
+        HR.HR_MANSIONI_CDC[k] = v.mansioni;
+      }
+      if(cdcUpdates > 0) updated++;
+    });
+    console.log(`[11_hr_analytics] LIVE HR aggiornato per ${updated}/8 CdC, anno ${anno}`);
+    return updated;
+  }catch(e){ console.warn('[11_hr_analytics] loadHrLive', e); return 0; }
+}
+
+document.addEventListener('DOMContentLoaded', async ()=>{
+  const liveCdC = await loadHrLive();   // [M7] fetch live PRIMA di renderAll
   renderAll();
   renderMansioniGrouped();
   const badge=document.getElementById('data-badge');
-  if(badge){ badge.textContent='● HR Analytics · Zoho Creator'; badge.className='data-badge live'; }
+  if(badge){
+    badge.textContent = liveCdC > 0
+      ? `● HR LIVE ${liveCdC}/8 CdC · Zoho Creator + Analytics`
+      : '◐ HR (fallback statico) · Zoho non raggiungibile';
+    badge.className = liveCdC > 0 ? 'data-badge live' : 'data-badge static';
+  }
 });
 </script>
 </body>

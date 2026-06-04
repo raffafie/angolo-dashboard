@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="athena-static-only" content="true"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Costo per Prodie — Dashboard Analytics</title>
-<link rel="stylesheet" href="shared/style.css?v=20260527-1500">
+<link rel="stylesheet" href="shared/style.css?v=20260528-1200">
 <style>
 .prodie-table { width:100%; border-collapse:collapse; font-size:12px; }
 .prodie-table th {
@@ -94,6 +94,9 @@
 
   <!-- KPI HERO — 6 box principali -->
   <div class="kpi-grid" id="kpi-cap"></div>
+
+  <!-- [M4] Triplice confronto €/prodie LIVE -->
+  <div id="triplice-host"></div>
 
   <!-- ❶ SCOSTAMENTO CAPITOLATO vs REALE — ranking ordinato (waterfall-like) -->
   <div class="chart-card" style="margin-bottom:14px">
@@ -206,10 +209,11 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
-<script src="shared/data.js?v=20260527-1500"></script>
-<script src="shared/filters.js?v=20260527-1500"></script>
-<script src="shared/live.js?v=20260527-1500"></script>
-<script src="shared/nav.js?v=20260527-1500"></script>
+<script src="shared/data.js?v=20260528-1200"></script>
+<script src="shared/filters.js?v=20260528-1200"></script>
+<script src="shared/live.js?v=20260528-1200"></script>
+<script src="shared/triplice.js?v=20260528-1200"></script>
+<script src="shared/nav.js?v=20260528-1200"></script>
 <script>
 const CAP_KEYS = ['PISA','RIETI','DROSSO','LORANZE','VICENZA','MODENA','VICO','CAMBO'];
 
@@ -720,6 +724,10 @@ document.addEventListener('DOMContentLoaded', () => {
   populateAllACdcSelect();
   renderAllegatoA();
   renderCostiMediTipo();
+  // [M4] Triplice confronto LIVE
+  const anno = document.getElementById('f-anno')?.value || '2025';
+  const cdc  = document.getElementById('f-cdc')?.value || 'all';
+  if(typeof renderTripliceConfronto === 'function') renderTripliceConfronto({hostId:'triplice-host', anno, cdc});
   // Quando l'utente cambia il filtro principale CdC, riallinea la fascia Allegato A
   document.getElementById('f-cdc')?.addEventListener('change', () => {
     const v = document.getElementById('f-cdc').value;

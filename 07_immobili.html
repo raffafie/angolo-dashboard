@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="athena-static-only" content="true"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Immobili — Dashboard Analytics</title>
-<link rel="stylesheet" href="shared/style.css?v=20260527-1500">
+<link rel="stylesheet" href="shared/style.css?v=20260528-1200">
 <style>
 .ticket-card {
   background:var(--surface); border:1px solid var(--border);
@@ -146,10 +146,10 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
-<script src="shared/data.js?v=20260527-1500"></script>
-<script src="shared/filters.js?v=20260527-1500"></script>
-<script src="shared/live.js?v=20260527-1500"></script>
-<script src="shared/nav.js?v=20260527-1500"></script>
+<script src="shared/data.js?v=20260528-1200"></script>
+<script src="shared/filters.js?v=20260528-1200"></script>
+<script src="shared/live.js?v=20260528-1200"></script>
+<script src="shared/nav.js?v=20260528-1200"></script>
 <script>
 const ALL_KEYS = ['PISA','DROSSO','LORANZE','VICENZA','RIETI','MODENA','VICO','CAMBO'];
 function getKeys(){
@@ -157,33 +157,61 @@ function getKeys(){
   return v === 'all' ? ALL_KEYS : ALL_KEYS.filter(k=>k===v);
 }
 
-// Ticket manutenzione reali — fonte: Zoho Creator "Richieste di Manutenzione"
-// Centro: MODENA IMMIGRAZIONE — Costellazioni (CC) — Novembre 2024
-// Aggiornato: Aprile 2026
-const TICKETS = [
-  {id:'COT-001',cdc:'MODENA',desc:'Stanza 1001 — porta rotta',                         stato:'chiuso', data:'05/11/2024',priority:'alta', costo:180},
-  {id:'COT-002',cdc:'MODENA',desc:'Stanza 1305 — specchio bagno da fissare',            stato:'chiuso', data:'05/11/2024',priority:'media',costo:80},
-  {id:'COT-003',cdc:'MODENA',desc:'Stanza 1304 — prese elettriche cortocircuito',       stato:'chiuso', data:'05/11/2024',priority:'media',costo:320},
-  {id:'COT-004',cdc:'MODENA',desc:'Piano 1 uffici — porta verde non chiude bene',       stato:'chiuso', data:'05/11/2024',priority:'media',costo:120},
-  {id:'COT-005',cdc:'MODENA',desc:'Stanza 1210 — lavandino otturato + disinfestazione', stato:'chiuso', data:'05/11/2024',priority:'media',costo:450},
-  {id:'COT-006',cdc:'MODENA',desc:'Stanza 1304 — tutte le prese in corto circuito',     stato:'chiuso', data:'06/11/2024',priority:'alta', costo:480},
-  {id:'COT-007',cdc:'MODENA',desc:'Stanza 1012 — presenza cimici (disinfestazione)',    stato:'chiuso', data:'08/11/2024',priority:'alta', costo:650},
-  {id:'COT-008',cdc:'MODENA',desc:'Stanza 1306 — presenza topi nel controsoffitto',     stato:'chiuso', data:'08/11/2024',priority:'alta', costo:850},
-  {id:'COT-009',cdc:'MODENA',desc:'Stanza 1405 — perdita d\'acqua dal soffitto',        stato:'chiuso', data:'08/11/2024',priority:'alta', costo:380},
-  {id:'COT-010',cdc:'MODENA',desc:'Stanza 1411 — perdita parete + sanitari otturati',   stato:'chiuso', data:'08/11/2024',priority:'alta', costo:520},
-  {id:'COT-011',cdc:'MODENA',desc:'Stanza 1409 — mancanza acqua calda',                 stato:'chiuso', data:'08/11/2024',priority:'alta', costo:290},
-  {id:'COT-012',cdc:'MODENA',desc:'Stanza 1301 — disinfestazione + riscaldamento guasto',stato:'chiuso',data:'09/11/2024',priority:'alta', costo:720},
-  {id:'COT-013',cdc:'MODENA',desc:'Stanza 607 — porta stanza non chiude',               stato:'chiuso', data:'09/11/2024',priority:'alta', costo:160},
-  {id:'COT-014',cdc:'MODENA',desc:'Cucina 4B — lavandino otturato + allagamento',       stato:'chiuso', data:'10/11/2024',priority:'alta', costo:410},
-  {id:'COT-015',cdc:'MODENA',desc:'Stanza 710 — scarico WC rotto/infiltrazione',        stato:'chiuso', data:'12/11/2024',priority:'alta', costo:340},
-  {id:'COT-016',cdc:'MODENA',desc:'Stanza 703 — perdita acqua sotto lavandino',         stato:'chiuso', data:'14/11/2024',priority:'media',costo:210},
-  {id:'COT-017',cdc:'MODENA',desc:'Stanza 1009 — rubinetti flusso scarso + finestra',   stato:'chiuso', data:'14/11/2024',priority:'media',costo:180},
-  {id:'COT-018',cdc:'MODENA',desc:'Reception — lavandino otturato',                     stato:'chiuso', data:'15/11/2024',priority:'media',costo:130},
-  {id:'COT-019',cdc:'MODENA',desc:'Stanza 707 — doccia otturata + allagamento bagno',   stato:'chiuso', data:'18/11/2024',priority:'alta', costo:290},
-  {id:'COT-020',cdc:'MODENA',desc:'Stanza 605 — scarafaggi (disinfestazione)',           stato:'chiuso', data:'18/11/2024',priority:'media',costo:580},
-  {id:'COT-021',cdc:'MODENA',desc:'Stanza 706 — scarico doccia bloccato',               stato:'chiuso', data:'18/11/2024',priority:'alta', costo:190},
-  {id:'COT-022',cdc:'MODENA',desc:'Stanza 1114 — verifica chimici (disinfestazione)',   stato:'chiuso', data:'19/11/2024',priority:'alta', costo:620},
-];
+// [M5] Ticket manutenzione LIVE da Zoho Creator gestione-immobili → Ticket_Ispezione_Edifico_Report
+// Popolato all'avvio da loadTicketsLive(); array vuoto finché il fetch non risolve.
+let TICKETS = [];
+
+// Mapping struttura Zoho (sotto-centro) → key CdC
+const STRUTTURA_TO_CDC = (s) => {
+  const x = (s || '').toUpperCase();
+  if (x.includes('COSTELLAZIONI'))                          return 'MODENA';
+  if (x.includes('PISA') || x.includes('CC10'))             return 'PISA';
+  if (x.includes('LORANZÈ') || x.includes('LORANZE') || x.includes('CC9')) return 'LORANZE';
+  if (x.includes('VICENZA') || x.startsWith('CAS') || x.startsWith('SUA')) return 'VICENZA';
+  if (x.includes('CAMPOBASSO') || x.includes('CC11'))       return 'CAMBO';
+  if (x.includes('RIETI') || x.startsWith('RETE'))          return 'RIETI';
+  if (x.includes('VICO') || x.includes('VALCHIUSA') || x.startsWith('VC')) return 'VICO';
+  if (x.includes('DROSSO') || x.startsWith('DR'))           return 'DROSSO';
+  return 'MODENA'; // fallback: il 99% dei ticket attuali è Modena/Costellazioni
+};
+
+// Mapping stato Zoho → stato legacy interno
+const STATO_TO_LEGACY = (s) => {
+  const x = (s || '').toUpperCase();
+  if (x.includes('RISOLT') || x.includes('CHIUS'))     return 'chiuso';
+  if (x.includes('LAVOR')  || x.includes('CORSO'))     return 'corso';
+  if (x.includes('PIANIF'))                            return 'pianif';
+  return 'aperto'; // SEGNALATO + tutto il resto = aperto
+};
+
+// Mapping live → schema legacy atteso dal codice di rendering
+function mapTicketLiveToLegacy(t, i) {
+  const dataRaw = (t.data || '').split(' ')[0]; // "07/03/2026 16:10" → "07/03/2026"
+  return {
+    id:       `TK-${String(i+1).padStart(4,'0')}`,
+    cdc:      STRUTTURA_TO_CDC(t.struttura),
+    struttura: t.struttura || '',
+    desc:     [t.tipo, t.note_segn].filter(Boolean).join(' — ') || '(nessuna descrizione)',
+    stato:    STATO_TO_LEGACY(t.stato),
+    stato_live: t.stato || '',
+    data:     dataRaw || '',
+    priority: '—',   // non disponibile in Zoho Creator
+    costo:    null,  // non disponibile in Zoho Creator
+    richiedente: t.richiedente || '',
+    note_int: t.note_int || '',
+  };
+}
+
+async function loadTicketsLive(){
+  if(!window.LIVE || !LIVE.getTicketImmobili) return;
+  try{
+    const d = await LIVE.getTicketImmobili('ALL');
+    if(d && Array.isArray(d.ticket_recenti)){
+      TICKETS = d.ticket_recenti.map(mapTicketLiveToLegacy);
+      console.log(`[07_immobili] LIVE ${TICKETS.length} ticket caricati (totale Zoho: ${d.totale_ticket})`);
+    }
+  }catch(e){ console.warn('[07_immobili] loadTicketsLive', e); }
+}
 
 function renderKpi(){
   const keys = getKeys();
@@ -291,17 +319,28 @@ function renderStructRows(){
 function renderTickets(){
   const keys = getKeys();
   const filteredTickets = keys.length === ALL_KEYS.length ? TICKETS : TICKETS.filter(t => keys.includes(t.cdc));
-  document.getElementById('ticket-list').innerHTML = filteredTickets.map(t=>{
+  const ticketHost = document.getElementById('ticket-list');
+  if(!filteredTickets.length){
+    ticketHost.innerHTML = '<div style="padding:16px;color:var(--text3);font-size:12px">Nessun ticket disponibile (fetch in corso o backend offline).</div>';
+    return;
+  }
+  ticketHost.innerHTML = filteredTickets.map(t=>{
     const cdc=DA.CDC[t.cdc];
     const stateMap={aperto:'ts-aperto',corso:'ts-corso',chiuso:'ts-chiuso',pianif:'ts-pianif'};
     const stateLabel={aperto:'Aperto',corso:'In Corso',chiuso:'Chiuso',pianif:'Pianificato'};
+    // Solo i dati realmente disponibili da Zoho Creator (no priority, no costo)
+    const meta = [
+      t.data && `Data: ${t.data}`,
+      t.struttura && `Struttura: ${t.struttura}`,
+      t.richiedente && `Richiedente: ${t.richiedente}`,
+    ].filter(Boolean).join(' · ');
     return `<div class="ticket-card">
       <div>
         <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${t.id} · <span class="cdc-pill ${cdc?.pill||''}">${cdc?.label||t.cdc}</span></div>
         <div style="font-size:13px;font-weight:600">${t.desc}</div>
-        <div style="margin-top:4px;color:var(--text2);font-size:11px">Data: ${t.data} · Priorità: ${t.priority} · €${DA.fmt(t.costo)}</div>
+        <div style="margin-top:4px;color:var(--text2);font-size:11px">${meta}</div>
       </div>
-      <span class="ticket-state ${stateMap[t.stato]}">${stateLabel[t.stato]}</span>
+      <span class="ticket-state ${stateMap[t.stato]}">${stateLabel[t.stato]} ${t.stato_live ? `<span style="opacity:.6;font-size:9px">(${t.stato_live})</span>` : ''}</span>
     </div>`;
   }).join('');
 }
@@ -444,7 +483,10 @@ function renderAll(){
   renderKpiTicketTimes(); renderTicketDistr(); renderTicketCdc(); renderTicketCdcRows();
   renderCompletamento();
 }
-document.addEventListener('DOMContentLoaded', renderAll);
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadTicketsLive();   // [M5] fetch live da Zoho Creator
+  renderAll();
+});
 </script>
 </body>
 </html>

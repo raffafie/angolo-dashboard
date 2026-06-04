@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="athena-static-only" content="true"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Ingressi & Nuclei Familiari — Dashboard Analytics</title>
-<link rel="stylesheet" href="shared/style.css?v=20260527-1500">
+<link rel="stylesheet" href="shared/style.css?v=20260528-1200">
 <style>
 .tipo-pill {
   display:inline-flex; align-items:center;
@@ -71,16 +71,16 @@
 <div class="main">
 
   <div class="page-header">
-    <h1><span class="icon">🚪</span> Nuovi Ingressi &amp; Nuclei Familiari — Modena Immigrazione</h1>
-    <p id="hdr-sub">Nuovi ingressi mensili per centro e nuclei familiari presenti · Fonte: Zoho Analytics / Anagrafica Ospiti</p>
+    <h1><span class="icon">📈</span> Presenze Mensili per Centro</h1>
+    <p id="hdr-sub">Andamento ospiti per CdC × mese — Fonte LIVE: Zoho Analytics "Presenze Ospiti Centro"</p>
   </div>
 
   <!-- FILTRI PERIODO -->
   <div class="filters" style="margin-bottom:14px">
     <label>Anno:</label>
-    <select id="f-anno" onchange="renderAll()">
-      <option value="2025" selected>2025</option>
-      <option value="2026">2026</option>
+    <select id="f-anno" onchange="reloadAndRender()">
+      <option value="2025">2025</option>
+      <option value="2026" selected>2026</option>
     </select>
     <label>Da:</label>
     <select id="f-da" onchange="renderAll()">
@@ -103,8 +103,11 @@
     <button class="btn-apply" onclick="renderAll()">↻ Aggiorna</button>
   </div>
 
-  <div class="alert-modena">
-    ℹ️ <span>I dati si riferiscono esclusivamente a <strong>Modena Immigrazione</strong> (CDC 157771000003280053) — 25 centri attivi, 65 strutture con Provincia=MO. I <strong>Nuclei Familiari</strong> sono calcolati tramite join Rappresentante→Ospiti (Data Entrata/Data Uscita), escludendo il campo "Added Time".</span>
+  <div class="alert alert-warn" style="margin-bottom:14px;font-size:11px">
+    ⚠️ <strong>Cambio semantica:</strong> "Nuovi Ingressi/Nuclei Familiari" mensili richiedono accesso al report <code>Anagrafica_Ospiti_Report</code> Zoho Creator
+    (oggi <strong>401 Unauthorized</strong> — permessi privacy ospiti) o ad un report aggregato dedicato.
+    In attesa di config Zoho, questa pagina mostra <strong>SUM Presenze mensili live</strong> per CdC (proxy operativo coerente coi rendiconti Prefettura).
+    <span id="live-badge" style="margin-left:8px;padding:2px 6px;border-radius:4px;background:rgba(245,158,11,.2);color:#f59e0b;font-size:9px">◌ caricamento…</span>
   </div>
 
   <!-- KPI -->
@@ -160,10 +163,10 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
-<script src="shared/data.js?v=20260527-1500"></script>
-<script src="shared/filters.js?v=20260527-1500"></script>
-<script src="shared/live.js?v=20260527-1500"></script>
-<script src="shared/nav.js?v=20260527-1500"></script>
+<script src="shared/data.js?v=20260528-1200"></script>
+<script src="shared/filters.js?v=20260528-1200"></script>
+<script src="shared/live.js?v=20260528-1200"></script>
+<script src="shared/nav.js?v=20260528-1200"></script>
 <script>
 // ── DATI ──────────────────────────────────────────────────────────────────
 // MESI e MESI_L sono calcolati dinamicamente dai filtri
@@ -185,48 +188,48 @@ function getMesiRange(){
   return { mesi, mesiL };
 }
 
-const MESI_PLACEHOLDER = ['2025-08','2025-09','2025-10','2025-11','2025-12'];
-const MESI_L_PLACEHOLDER  = ['Ago','Set','Ott','Nov','Dic'];
-let MESI   = MESI_PLACEHOLDER;
-let MESI_L = MESI_L_PLACEHOLDER;
+// [M6] Dati live da /api/dashboard/presenze-mensili — popolati da loadPresenzeLive()
+let MESI   = [];
+let MESI_L = [];
+// NI = "presenze mensili per CdC" (proxy di ingressi: chi è presente; vero count ingressi richiede permessi Zoho)
+// NF = vuoto: nuclei familiari richiedono accesso PII ad Anagrafica_Ospiti_Report (401)
+let NI = {};
+let NF = {};
 
-const NI = {
-  "CAD1": {"2025-08":72,"2025-09":24,"2025-10":0,"2025-11":0,"2025-12":0},
-  "CAD2": {"2025-08":24,"2025-09":24,"2025-10":0,"2025-11":12,"2025-12":12},
-  "CAD4": {"2025-08":0,"2025-09":24,"2025-10":216,"2025-11":0,"2025-12":0},
-  "CAD5": {"2025-08":0,"2025-09":12,"2025-10":24,"2025-11":0,"2025-12":0},
-  "CAD6": {"2025-08":0,"2025-09":72,"2025-10":84,"2025-11":0,"2025-12":0},
-  "CAS MSNA":{"2025-08":0,"2025-09":60,"2025-10":36,"2025-11":0,"2025-12":0},
-  "CAS1": {"2025-08":36,"2025-09":0,"2025-10":24,"2025-11":36,"2025-12":0},
-  "CAS2": {"2025-08":12,"2025-09":24,"2025-10":24,"2025-11":24,"2025-12":12},
-  "CAS3": {"2025-08":0,"2025-09":0,"2025-10":36,"2025-11":12,"2025-12":36},
-  "CC1":  {"2025-08":24,"2025-09":24,"2025-10":48,"2025-11":24,"2025-12":24},
-  "CC10": {"2025-08":36,"2025-09":144,"2025-10":132,"2025-11":216,"2025-12":72},
-  "CC11": {"2025-08":396,"2025-09":828,"2025-10":0,"2025-11":0,"2025-12":0},
-  "CC2":  {"2025-08":24,"2025-09":60,"2025-10":12,"2025-11":0,"2025-12":24},
-  "CC3":  {"2025-08":0,"2025-09":36,"2025-10":60,"2025-11":0,"2025-12":12},
-  "CC4":  {"2025-08":24,"2025-09":0,"2025-10":0,"2025-11":0,"2025-12":0},
-  "CC5":  {"2025-08":0,"2025-09":36,"2025-10":48,"2025-11":144,"2025-12":48},
-  "CC6":  {"2025-08":12,"2025-09":48,"2025-10":36,"2025-11":72,"2025-12":0},
-  "CC7":  {"2025-08":0,"2025-09":36,"2025-10":36,"2025-11":0,"2025-12":0},
-  "CC8":  {"2025-08":0,"2025-09":0,"2025-10":72,"2025-11":72,"2025-12":24},
-  "CC9":  {"2025-08":12,"2025-09":36,"2025-10":84,"2025-11":96,"2025-12":0},
-  "DR1":  {"2025-08":48,"2025-09":72,"2025-10":0,"2025-11":0,"2025-12":0},
-  "DR2":  {"2025-08":0,"2025-09":60,"2025-10":0,"2025-11":0,"2025-12":0},
-  "DR3":  {"2025-08":0,"2025-09":12,"2025-10":12,"2025-11":0,"2025-12":0},
-  "RETE1":{"2025-08":84,"2025-09":0,"2025-10":96,"2025-11":96,"2025-12":84},
-  "RETE2":{"2025-08":24,"2025-09":0,"2025-10":0,"2025-11":120,"2025-12":60}
-};
+async function loadPresenzeLive(){
+  const anno = getAnnoFilter();
+  const badge = document.getElementById('live-badge');
+  if(!window.LIVE || !LIVE.getPresenzeMensili){
+    if(badge){ badge.style.background='rgba(239,68,68,.2)'; badge.style.color='#ef4444'; badge.textContent='✗ live API non disponibile'; }
+    return;
+  }
+  try{
+    const d = await LIVE.getPresenzeMensili(anno);
+    if(!d || !d.by_cdc){
+      if(badge){ badge.style.background='rgba(239,68,68,.2)'; badge.style.color='#ef4444'; badge.textContent='✗ dati nulli'; }
+      return;
+    }
+    // Reset
+    NI = {};
+    // Per ogni CdC alto-livello, costruisci serie mensile keyed da MESI ("2026-01"...)
+    Object.entries(d.by_cdc).forEach(([k, v])=>{
+      const serie = {};
+      v.presenze.forEach((val, i)=>{ const m = String(i+1).padStart(2,'0'); serie[`${anno}-${m}`] = val; });
+      NI[k] = serie;
+    });
+    ALL_CENTRI = getAllCentri();
+    if(badge){ badge.style.background='rgba(16,185,129,.2)'; badge.style.color='#10b981'; badge.textContent=`● LIVE ${anno}`; }
+    console.log(`[10_ingressi] LIVE caricato ${Object.keys(NI).length} CdC × 12 mesi ${anno}`);
+  }catch(e){
+    console.warn('[10_ingressi] loadPresenzeLive', e);
+    if(badge){ badge.style.background='rgba(239,68,68,.2)'; badge.style.color='#ef4444'; badge.textContent='✗ errore fetch'; }
+  }
+}
 
-const NF = {
-  "CAD1": {"2025-08":3,"2025-09":1,"2025-10":1,"2025-11":1,"2025-12":1},
-  "CAD2": {"2025-08":8,"2025-09":9,"2025-10":9,"2025-11":8,"2025-12":8},
-  "CAD6": {"2025-08":0,"2025-09":1,"2025-10":1,"2025-11":1,"2025-12":0},
-  "CC2":  {"2025-08":1,"2025-09":1,"2025-10":1,"2025-11":1,"2025-12":1},
-  "CC4":  {"2025-08":1,"2025-09":1,"2025-10":1,"2025-11":1,"2025-12":1},
-  "CC6":  {"2025-08":1,"2025-09":1,"2025-10":1,"2025-11":0,"2025-12":0},
-  "CC7":  {"2025-08":4,"2025-09":3,"2025-10":3,"2025-11":3,"2025-12":3}
-};
+async function reloadAndRender(){
+  await loadPresenzeLive();
+  renderAll();
+}
 
 const TIPO_COLORS = {
   CC:  '#3b82f6', CAD: '#10b981', CAS: '#f59e0b',
@@ -234,6 +237,9 @@ const TIPO_COLORS = {
 };
 
 function tipo(c) {
+  // 1) Se è una key in DA.CDC (PISA/MODENA/...), usa il tipo autoritativo (CC/CAD/SUA)
+  if (window.DA && DA.CDC && DA.CDC[c]) return DA.CDC[c].tipo || 'OTHER';
+  // 2) Fallback per sotto-centri legacy (CC1, CAD1, CAS1, DR1, RETE1)
   if (c.startsWith('CC'))   return 'CC';
   if (c.startsWith('CAD'))  return 'CAD';
   if (c.startsWith('CAS'))  return 'CAS';
@@ -242,7 +248,9 @@ function tipo(c) {
   return 'OTHER';
 }
 
-const ALL_CENTRI = Object.keys(NI).sort();
+// ALL_CENTRI deve ricalcolarsi dopo loadPresenzeLive (NI è popolato async)
+function getAllCentri(){ return Object.keys(NI).sort(); }
+let ALL_CENTRI = [];
 let activeFilter = 'ALL';
 
 function niV(c,m) { return (NI[c]&&NI[c][m])||0; }
@@ -477,8 +485,9 @@ function renderAll() {
 }
 
 // ── INIT ─────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   DA.chartDefaults(Chart);
+  await loadPresenzeLive();  // [M6] fetch live da /api/dashboard/presenze-mensili
   renderAll();
 });
 </script>

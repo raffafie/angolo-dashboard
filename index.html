@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="athena-static-only" content="true"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Dashboard Analytics — Cooperativa Angolo</title>
-<link rel="stylesheet" href="shared/style.css?v=20260527-1500">
+<link rel="stylesheet" href="shared/style.css?v=20260528-1200">
 <style>
 /* ── RESET & BASE ─────────────────────────────────────────── */
 * { box-sizing:border-box; }
@@ -381,15 +381,20 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
-<script src="shared/data.js?v=20260527-1500"></script>
-<script src="shared/filters.js?v=20260527-1500"></script>
-<script src="shared/live.js?v=20260527-1500"></script>
-<script src="shared/nav.js?v=20260527-1500"></script>
+<script src="shared/data.js?v=20260528-1200"></script>
+<script src="shared/filters.js?v=20260528-1200"></script>
+<script src="shared/live.js?v=20260528-1200"></script>
+<script src="shared/nav.js?v=20260528-1200"></script>
 <script>
-document.addEventListener('DOMContentLoaded', ()=>{
+document.addEventListener('DOMContentLoaded', async ()=>{
   DA.chartDefaults(Chart);
 
-  //  DATI CONSOLIDATI 
+  // [M8] Carica REDD live dal backend (richiesto da KPI consolidati + grafici)
+  if(window.DA && DA.loadReddLive){
+    await DA.loadReddLive('2025');
+  }
+
+  //  DATI CONSOLIDATI
   const KEYS6 = ['PISA','RIETI','DROSSO','LORANZE','VICENZA','VICO'];
   const totalF = DA.sum(KEYS6.map(k=>DA.ANNO2025[k].f));
   const totalC = DA.sum(KEYS6.map(k=>DA.ANNO2025[k].c));
