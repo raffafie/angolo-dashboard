@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-10T05:19:14.199998Z",
+  "generated_at": "2026-07-13T07:23:01.178075Z",
   "year": "2026",
   "prev_year": "2025",
   "files": [
@@ -20,6 +20,6 @@
     "ore-incidenza.json",
     "mappatura-mansioni.json"
   ],
-  "ok_count": 13,
-  "err_count": 3
+  "ok_count": 14,
+  "err_count": 2
 }
